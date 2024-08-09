@@ -35,11 +35,18 @@
       should run synchronously, as opposed to be parallelizable when
       `options.experimental_optimization.map_parallelization=True`. This saves
       memory compared to setting `num_parallel_calls=1`.
+    * Add optional `use_unbounded_threadpool` argument to `map`, to specify that
+      the `map` should use an unbounded threadpool instead of the default pool
+      that is based on the number of cores on the machine. This can improve 
+      throughput for map functions which perform IO or otherwise release the 
+      CPU.
 * `tf.lite`
     * `Dequantize` op supports `TensorType_INT4`.
         * This change includes per-channel dequantization.
     * Add support for `stablehlo.composite`.
     * `EmbeddingLookup` op supports `TensorType_INT4` values.
+    * `FullyConnected` op supports `TensorType_INT16` activation and
+      `TensorType_Int4` weight per-channel quantization.
 
 * `tf.tensor_scatter_update`, `tf.tensor_scatter_add` and of other reduce types.
     * Support `bad_indices_policy`.

@@ -25,8 +25,10 @@ limitations under the License.
 
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_module_group.h"
+#include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/service/backend.h"
 #include "xla/service/computation_layout.h"
 #include "xla/service/hlo_runner.h"
@@ -246,6 +248,13 @@ class HloTestBase : public ManifestCheckingTest {
       int64_t num_replicas, bool run_hlo_passes,
       DeviceAssignment* device_assignment = nullptr);
 
+  // Convenience function for above. Allows passing different inputs to
+  // different replicas of the same program.
+  absl::StatusOr<std::vector<Literal>> ExecuteReplicated(
+      std::unique_ptr<HloModule> module,
+      std::vector<std::vector<Literal*>> arguments, int64_t num_replicas,
+      bool run_hlo_passes);
+
   // Executes the given hlo module on two backends and compares results.
   //
   // 'arguments': the input of the hlo module.
@@ -423,6 +432,9 @@ class HloTestBase : public ManifestCheckingTest {
   HloInstruction* FindInstruction(HloModule* module, absl::string_view name);
   // Gets the instruction from the given module with the given opcode.
   HloInstruction* FindInstruction(HloModule* module, HloOpcode opcode);
+  // Gets all the instructions from the given module with the given opcode.
+  std::vector<HloInstruction*> FindInstructions(HloModule* module,
+                                                HloOpcode opcode);
 
   // Return an HLO verifier constructed for the test backend.
   HloVerifier& verifier() const { return *hlo_verifier_; }
@@ -431,6 +443,7 @@ class HloTestBase : public ManifestCheckingTest {
 
   // Returns the backend owned by the test runner.
   Backend& backend();
+  int64_t num_devices() { return backend().device_count(); }
 
   HloRunner test_runner_;
   HloRunner reference_runner_;
@@ -505,6 +518,13 @@ class HloTestBase : public ManifestCheckingTest {
   absl::StatusOr<std::unique_ptr<HloRunnerInterface>> GetHloRunnerForTest(
       se::Platform* test_platform);
 };
+
+#define SKIP_TEST_IF_NUM_DEVICES_LESS_THAN(x)                      \
+  int64_t num_devices = backend().device_count();                  \
+  if (num_devices < x) {                                           \
+    GTEST_SKIP() << "Test requires at least " << x << " devices (" \
+                 << num_devices << " available)";                  \
+  }
 
 }  // namespace xla
 

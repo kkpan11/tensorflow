@@ -48,8 +48,8 @@ limitations under the License.
 #include "xla/shape_util.h"
 #include "xla/tests/literal_test_util.h"
 #include "xla/tests/test_utils.h"
+#include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/util.h"
-#include "tsl/lib/core/status_test_util.h"
 #include "tsl/platform/env.h"
 #include "tsl/platform/errors.h"
 #include "tsl/platform/file_system.h"
@@ -134,13 +134,13 @@ ENTRY DonationWithExecutionError() -> f32[2, 2] {
   auto result = pjrt_executable->Execute(/*argument_handles=*/{{buffer.get()}},
                                          /*options=*/{});
   ASSERT_FALSE(result.ok());
-  EXPECT_THAT(result.status().message(), ::testing::HasSubstr("test error."));
+  EXPECT_THAT(result.status().message(), HasSubstr("test error."));
 
   result = pjrt_executable->Execute(/*argument_handles=*/{{buffer.get()}},
                                     /*options=*/{});
   ASSERT_FALSE(result.ok());
   EXPECT_THAT(result.status().message(),
-              ::testing::HasSubstr("buffer has been deleted or donated."));
+              HasSubstr("buffer has been deleted or donated."));
 }
 
 TEST(TfrtCpuClientTest, HloSnapshot) {
