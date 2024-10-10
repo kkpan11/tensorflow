@@ -652,6 +652,44 @@ XLA_TEST_F(CollectiveOpsTest, ReplicaId) {
   }
 }
 
+XLA_TEST_F(CollectiveOpsTest, DISABLED_ON_CPU(CollectiveBroadcast_TwoGPUs)) {
+  const char* const kModuleStr = R"(
+  HloModule test
+
+  collective_broadcast {
+    p0 = u32[2] parameter(0)
+    ROOT result = u32[2] collective-broadcast(p0), replica_groups={{1, 0}}
+  }
+
+  ENTRY test_computation {
+    replica = u32[] replica-id()
+    ten = u32[] constant(10)
+    sum = u32[] add(replica, ten)
+    p = u32[2] broadcast(sum), dimensions={}
+    cb = ((u32[2]), u32[2]) async-start(u32[2] %p), calls=collective_broadcast
+    ROOT res = u32[2] async-done(cb), calls=collective_broadcast
+  }
+  )";
+  const int64_t kNumReplicas = 2;
+  SKIP_TEST_IF_NUM_DEVICES_LESS_THAN(kNumReplicas);
+
+  HloModuleConfig config =
+      GetModuleConfigForTest(/*replica_count=*/kNumReplicas);
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(kModuleStr, config));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<Literal> results,
+      ExecuteReplicated(std::move(module), absl::Span<Literal* const>{},
+                        kNumReplicas,
+                        /*use_threads=*/true));
+  ASSERT_EQ(results.size(), kNumReplicas);
+  EXPECT_TRUE(LiteralTestUtil::Equal(LiteralUtil::CreateR1<uint32_t>({11, 11}),
+                                     results[0]));
+  EXPECT_TRUE(LiteralTestUtil::Equal(LiteralUtil::CreateR1<uint32_t>({11, 11}),
+                                     results[1]));
+}
+
 XLA_TEST_F(CollectiveOpsTest, DISABLED_ON_CPU(CollectiveBroadcast_Simple)) {
   const char* const kModuleStr = R"(
   HloModule test
@@ -692,6 +730,38 @@ XLA_TEST_F(CollectiveOpsTest, DISABLED_ON_CPU(CollectiveBroadcast_Simple)) {
                                      results[2]));
   EXPECT_TRUE(LiteralTestUtil::Equal(LiteralUtil::CreateR1<uint32_t>({11, 11}),
                                      results[3]));
+}
+
+XLA_TEST_F(CollectiveOpsTest, CollectivePermute_TwoGPUs) {
+  const char* const kModuleStr = R"(
+  HloModule test
+  ENTRY test_computation {
+    replica = u32[] replica-id()
+    ten = u32[] constant(10)
+    sum = u32[] add(replica, ten)
+    p = u32[2] broadcast(sum), dimensions={}
+    permute = u32[2] collective-permute(p), source_target_pairs={{1,0}, {0,1}}
+    ROOT copy = u32[2] copy(permute)
+  }
+  )";
+  const int64_t kNumReplicas = 2;
+  SKIP_TEST_IF_NUM_DEVICES_LESS_THAN(kNumReplicas);
+
+  HloModuleConfig config =
+      GetModuleConfigForTest(/*replica_count=*/kNumReplicas);
+  TF_ASSERT_OK_AND_ASSIGN(auto module,
+                          ParseAndReturnVerifiedModule(kModuleStr, config));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::vector<Literal> results,
+      ExecuteReplicated(std::move(module), absl::Span<Literal* const>{},
+                        kNumReplicas,
+                        /*use_threads=*/true, /*run_hlo_passes=*/true));
+  ASSERT_EQ(results.size(), kNumReplicas);
+  EXPECT_TRUE(LiteralTestUtil::Equal(LiteralUtil::CreateR1<uint32_t>({11, 11}),
+                                     results[0]));
+  EXPECT_TRUE(LiteralTestUtil::Equal(LiteralUtil::CreateR1<uint32_t>({10, 10}),
+                                     results[1]));
 }
 
 XLA_TEST_F(CollectiveOpsTest, CollectivePermute_Simple) {
@@ -2151,6 +2221,10 @@ body {
       }
     recv-data.1 = u32[2] get-tuple-element(recv-done.1), index=0
 
+    send-done.1 = token[] send-done(send.1), channel_id=0,
+    frontend_attributes={
+        _xla_send_recv_pipeline="0"
+      }
     replica = u32[] replica-id()
     constant0 = u32[] constant(0)
     compare0 = pred[] compare(replica, constant0), direction=EQ
@@ -2163,10 +2237,6 @@ body {
     r = u32[2] broadcast(c1), dimensions={}
     s = u32[2] add(r, recv-data)
 
-    send-done.1 = token[] send-done(send.1), channel_id=0,
-    frontend_attributes={
-        _xla_send_recv_pipeline="0"
-      }
     ROOT result = (u32[], u32[2]) tuple(new_count, s)
   }
 

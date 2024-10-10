@@ -33,6 +33,7 @@ limitations under the License.
 #include "mlir/IR/BuiltinAttributes.h"  // from @llvm-project
 #include "mlir/IR/BuiltinOps.h"  // from @llvm-project
 #include "mlir/IR/Operation.h"  // from @llvm-project
+#include "mlir/IR/OwningOpRef.h"  // from @llvm-project
 #include "mlir/IR/Value.h"  // from @llvm-project
 #include "mlir/IR/Verifier.h"  // from @llvm-project
 #include "mlir/Support/LogicalResult.h"  // from @llvm-project
@@ -100,7 +101,8 @@ CompileAndRegisterIfrtPrograms(absl::string_view model_name,
             ifrt_model_context.GetDeviceMgr(),
             ifrt_model_context.GetShapeRepresentationFn(),
             ifrt_model_context.GetIfrtServingCoreSelector(),
-            ifrt_model_context.GetCompilationEnvironmentProto()));
+            ifrt_model_context.GetCompilationEnvironmentProto(),
+            ifrt_model_context.GetPersistentCompilationCache()));
 
     // Register the Ifrt program to `ServingExecutableRegistry` so that
     // the client TF program can invoke them via `IfrtCall` op.
@@ -146,6 +148,12 @@ absl::Status IfrtBackendCompiler::CompileTensorflow(
   if (!ifrt_model_context.has_value()) {
     return absl::InternalError(
         "Failed to find model context for ifrt serving.");
+  }
+
+  if ((*ifrt_model_context)->IsFrozen()) {
+    return absl::FailedPreconditionError(
+        "Cannot compile IFRT programs after the model is frozen. Please make "
+        "sure warmup covers all signatures by following go/tf-model-warmup.");
   }
 
   mlir::StatusScopedDiagnosticHandler diag_handler(module->getContext());

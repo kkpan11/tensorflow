@@ -20,6 +20,7 @@ limitations under the License.
 
 #include "absl/algorithm/container.h"
 #include "absl/log/check.h"
+#include "absl/strings/str_format.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
@@ -121,14 +122,7 @@ CodegenDecision IsInstructionSupportsDataTypes(
     const auto operand_type = operand->shape().element_type();
     switch (instr.opcode()) {
       case HloOpcode::kConvert:
-        // TODO(b/358580281): remove DebugOptions from this function after
-        // enabling int4 in Triton GEMM.
-        if (operand_type == S4 && instr.GetModule()
-                                      ->config()
-                                      .debug_options()
-                                      .xla_gpu_enable_triton_gemm_int4()) {
-          continue;
-        }
+        if (operand_type == S4) continue;
         [[fallthrough]];
       default:
         if (!IsTritonSupportedDataType(operand_type, gpu_version)) {
@@ -226,6 +220,7 @@ bool IsDotAlgorithmSupportedByTriton(
   auto rocm_compute_capability =
       std::get_if<se::RocmComputeCapability>(&gpu_version);
   switch (algorithm) {
+    case PrecisionConfig::ALG_DOT_TF32_TF32_F32_X3:
     case PrecisionConfig::ALG_DOT_TF32_TF32_F32:
       if (cuda_compute_capability) {
         return true;
@@ -274,8 +269,9 @@ CodegenDecision CanTritonHandleGEMM(
   } else {
     if (!IsDotAlgorithmSupportedByTriton(dot.precision_config().algorithm(),
                                          gpu_version)) {
-      return CodegenDecision::Forbid(
-          "Unsupported algorithm on the current device(s).");
+      return CodegenDecision::Forbid(absl::StrFormat(
+          "Unsupported algorithm on the current device(s): %s",
+          PrecisionConfig::Algorithm_Name(dot.precision_config().algorithm())));
     }
   }
 

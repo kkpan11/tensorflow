@@ -114,7 +114,7 @@ class CudaExecutor : public GpuExecutor {
 
   absl::StatusOr<std::unique_ptr<DeviceDescription>> CreateDeviceDescription()
       const override {
-    return GpuExecutor::CreateDeviceDescription(device_ordinal());
+    return CudaExecutor::CreateDeviceDescription(device_ordinal());
   }
   void* UnifiedMemoryAllocate(uint64_t size) override {
     return GpuDriver::UnifiedMemoryAllocate(gpu_context(), size);
@@ -137,6 +137,9 @@ class CudaExecutor : public GpuExecutor {
     return GpuDriver::HostDeallocate(gpu_context(), location);
   }
 
+  bool HostMemoryRegister(void* location, uint64_t size) override;
+  bool HostMemoryUnregister(void* location) override;
+
   absl::StatusOr<MemoryType> GetPointerMemorySpace(const void* ptr) override {
     return GpuDriver::GetPointerMemorySpace(
         reinterpret_cast<GpuDevicePtr>(const_cast<void*>(ptr)));
@@ -150,6 +153,9 @@ class CudaExecutor : public GpuExecutor {
     }
     return it->second;
   }
+
+  static absl::StatusOr<std::unique_ptr<DeviceDescription>>
+  CreateDeviceDescription(int device_ordinal);
 
  private:
   // Collects metadata for the specified kernel.

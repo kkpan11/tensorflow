@@ -87,7 +87,16 @@ load(
     "tf_opts_nortti_if_lite_protos",
     "transitive_hdrs",
 )
-load("//tensorflow:tensorflow.default.bzl", "cc_header_only_library", "filegroup", "get_compatible_with_portable", "tensorflow_opensource_extra_deps", "tf_monitoring_framework_deps", "tf_selective_registration_deps")
+load(
+    "//tensorflow:tensorflow.default.bzl",
+    "cc_header_only_library",
+    "custom_op_cc_header_only_library",
+    "filegroup",
+    "get_compatible_with_portable",
+    "tensorflow_opensource_extra_deps",
+    "tf_monitoring_framework_deps",
+    "tf_selective_registration_deps",
+)
 
 # For platform specific build config
 load(
@@ -175,9 +184,9 @@ tf_proto_library(
         "//tensorflow/core/grappler/costs:op_performance_data",
         "@local_tsl//tsl/profiler/protobuf:profiler_options_proto",
         "@local_tsl//tsl/profiler/protobuf:xplane_proto",
-        "@local_tsl//tsl/protobuf:coordination_config_proto",
-        "@local_tsl//tsl/protobuf:distributed_runtime_payloads_proto",
-        "@local_tsl//tsl/protobuf:status_proto",
+        "@local_xla//xla/tsl/protobuf:coordination_config_proto",
+        "@local_xla//xla/tsl/protobuf:distributed_runtime_payloads_proto",
+        "@local_xla//xla/tsl/protobuf:status_proto",
     ],
     visibility = ["//visibility:public"],
 )
@@ -1468,7 +1477,7 @@ cc_library(
         "@local_xla//xla:autotune_results_proto_cc_impl",
         "@local_xla//xla:autotuning_proto_cc_impl",
         "@local_tsl//tsl/profiler/protobuf:profiler_options_proto_cc_impl",
-        "@local_tsl//tsl/protobuf:protos_all_cc_impl",
+        "@local_xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@local_xla//xla:xla_proto_cc_impl",
         "@local_xla//xla:xla_data_proto_cc_impl",
         "@local_xla//xla/service:hlo_proto_cc_impl",
@@ -1662,6 +1671,7 @@ tf_cuda_library(
         ":protos_all_cc",
         "//tensorflow/compiler/jit:common",
         "//tensorflow/core/activity_watcher",
+        "//tensorflow/core/config:flag_defs",
         "//tensorflow/core/example:feature_util",
         "//tensorflow/core/framework:allocator",
         "//tensorflow/core/framework:allocator_registry_impl",
@@ -1719,7 +1729,7 @@ tf_cuda_library(
     alwayslink = 1,
 )
 
-cc_header_only_library(
+custom_op_cc_header_only_library(
     name = "framework_headers_lib",
     # Fully depend on external repositories, because identifying the headers
     # is fragile.
@@ -2032,7 +2042,6 @@ transitive_hdrs(
 # py_proto_library(
 #     name = "protos_all_py_pb2",
 #     has_services = 0,
-#     api_version = 2,
 #     visibility = ["//visibility:public"],
 #     deps = [":protos_all"],
 # )

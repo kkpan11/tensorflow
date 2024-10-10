@@ -541,6 +541,7 @@ void AddXlaGpuOpsOptimizationPasses(mlir::OpPassManager& pm) {
 
 void AddLoopTransformationPasses(mlir::OpPassManager& pm) {
   pm.addNestedPass<FuncOp>(CreateLowerXlaGpuToScfPass());
+  pm.addNestedPass<FuncOp>(CreateFuseLoopsPass());
   pm.addPass(mlir::createInlinerPass({}, [&](mlir::OpPassManager& pm) {
     // CSE after inlining because inlining can introduce duplicates.
     pm.addPass(mlir::createCSEPass());

@@ -112,12 +112,14 @@ static bool IsAsyncStartCommand(const HloInstruction* hlo,
     if (hlo->async_wrapped_opcode() == HloOpcode::kFusion) {
       return config.enabled_commands.contains(DebugOptions::FUSION);
     }
-    if (hlo->async_wrapped_opcode() == HloOpcode::kReduceScatter) {
+    if (hlo->async_wrapped_opcode() == HloOpcode::kReduceScatter ||
+        hlo->async_wrapped_opcode() == HloOpcode::kAllToAll) {
       return config.enabled_commands.contains(DebugOptions::COLLECTIVES);
     }
   }
 
-  if (hlo->opcode() == HloOpcode::kReduceScatter) {
+  if (hlo->opcode() == HloOpcode::kReduceScatter ||
+      hlo->opcode() == HloOpcode::kAllToAll) {
     return config.enabled_commands.contains(DebugOptions::COLLECTIVES);
   }
 
@@ -138,7 +140,8 @@ static bool IsAsyncDoneCommand(const HloInstruction* hlo,
     if (hlo->async_wrapped_opcode() == HloOpcode::kFusion) {
       return config.enabled_commands.contains(DebugOptions::FUSION);
     }
-    if (hlo->async_wrapped_opcode() == HloOpcode::kReduceScatter) {
+    if (hlo->async_wrapped_opcode() == HloOpcode::kReduceScatter ||
+        hlo->async_wrapped_opcode() == HloOpcode::kAllToAll) {
       return config.enabled_commands.contains(DebugOptions::COLLECTIVES);
     }
   }
@@ -774,11 +777,6 @@ absl::StatusOr<bool> CommandBufferScheduling::Run(
                  device_description_.driver_version()) <
         se::SemanticVersion{12, 3, 0}) {
       erase(kRequireTracing);  // cuStreamBeginCaptureToGraph
-    }
-    if (std::min(device_description_.runtime_version(),
-                 device_description_.driver_version()) <
-        se::SemanticVersion{12, 4, 0}) {
-      // Conditionals With Memsets require cuda 12.4.1.
       erase(kRequireConditionals);  // on-device control flow
     }
   };

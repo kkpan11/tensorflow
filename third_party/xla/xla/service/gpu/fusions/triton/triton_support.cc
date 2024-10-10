@@ -44,6 +44,7 @@ bool IsTritonSupportedDataType(PrimitiveType type,
                                const se::GpuComputeCapability& gpu_version) {
   switch (type) {
     case PRED:
+    case S4:
     case S8:
     case S16:
     case S32:
@@ -106,6 +107,11 @@ absl::flat_hash_set<HloOpcode> TritonSupportedUnaryElementwiseOps(
                                                       HloOpcode::kCeil};
     ret.insert(additional_opcodes.begin(), additional_opcodes.end());
   }
+
+  if (primitive_util::IsFloatingPointType(element_type)) {
+    ret.insert(HloOpcode::kReducePrecision);
+  }
+
   return ret;
 }
 
@@ -284,6 +290,15 @@ CodegenDecision IsTritonSupportedInstructionImpl(
                      "Only scalar constants are supported in Triton.");
   }
 
+  if (instr.opcode() == HloOpcode::kIota) {
+    PrimitiveType element_type = instr.shape().element_type();
+    return element_type != PrimitiveType::F8E4M3FN &&
+                   element_type != PrimitiveType::F8E5M2
+               ? CodegenDecision::Allow()
+               : CodegenDecision::Forbid(
+                     "F8E4M3FN and F8E5M2 are not supported for iota.");
+  }
+
   if (instr.IsElementwise()) {
     if (!IsTritonSupportedElementwise(
             instr.opcode(),
@@ -307,9 +322,13 @@ CodegenDecision IsTritonSupportedInstructionImpl(
     case HloOpcode::kTranspose:
     case HloOpcode::kParameter:
     case HloOpcode::kBroadcast:
-    case HloOpcode::kBitcast:
-    case HloOpcode::kReshape:
       return CodegenDecision::Allow();
+    case HloOpcode::kBitcast:
+
+    case HloOpcode::kReshape:
+      return (instr.shape().rank() == 0 && instr.operand(0)->shape().rank() > 0)
+                 ? CodegenDecision::Forbid("0D reshapes are not yet supported.")
+                 : CodegenDecision::Allow();
     default:
       VLOG(2) << "Unsupported instruction: " << instr.ToString();
       break;
@@ -411,6 +430,20 @@ CodegenDecision IsTritonSupportedInstruction(
   VLOG(2) << "IsTritonSupportedInstruction: " << instr.ToString() << " "
           << bool(decision);
   return decision;
+}
+
+CodegenDecision IsTritonSupportedComputation(
+    const HloComputation& computation,
+    const se::GpuComputeCapability& gpu_compute_capability) {
+  for (const auto* instruction : computation.instructions()) {
+    if (CodegenDecision can_codegen =
+            IsTritonSupportedInstruction(*instruction, gpu_compute_capability);
+        !can_codegen) {
+      return can_codegen;
+    }
+  }
+
+  return CodegenDecision::Allow();
 }
 
 bool IsTritonFusedComputation(const HloComputation& computation) {

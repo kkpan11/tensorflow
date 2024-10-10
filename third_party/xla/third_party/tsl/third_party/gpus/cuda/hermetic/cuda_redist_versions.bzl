@@ -101,6 +101,10 @@ CUDNN_REDIST_JSON_DICT = {
         "https://developer.download.nvidia.com/compute/cudnn/redist/redistrib_9.4.0.json",
         "6eeaafc5cc3d4bb2f283e6298e4c55d4c59d7c83c5d9fd8721a2c0e55aee4e54",
     ],
+    "9.5.0": [
+        "https://developer.download.nvidia.com/compute/cudnn/redist/redistrib_9.5.0.json",
+        "3939f0533fdd0d3aa7edd1ac358d43da18e438e5d8f39c3c15bb72519bad7fb5",
+    ],
 }
 
 # The versions are different for x86 and aarch64 architectures because only
@@ -145,6 +149,7 @@ REDIST_VERSIONS_TO_BUILD_TEMPLATES = {
     "nvidia_driver": {
         "repo_name": "cuda_driver",
         "version_to_template": {
+            "560": "//third_party/gpus/cuda/hermetic:cuda_driver.BUILD.tpl",
             "555": "//third_party/gpus/cuda/hermetic:cuda_driver.BUILD.tpl",
             "550": "//third_party/gpus/cuda/hermetic:cuda_driver.BUILD.tpl",
             "545": "//third_party/gpus/cuda/hermetic:cuda_driver.BUILD.tpl",
