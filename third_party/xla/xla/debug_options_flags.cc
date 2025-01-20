@@ -161,6 +161,7 @@ DebugOptions DefaultDebugOptionsIgnoringFlags() {
   opts.set_xla_gpu_enable_nccl_user_buffers(false);
   opts.set_xla_gpu_enable_nccl_comm_splitting(true);
   opts.set_xla_gpu_enable_nccl_per_stream_comms(false);
+  opts.set_xla_gpu_nccl_init_max_rank_per_root_ratio(128);
 
   opts.set_xla_gpu_temp_buffer_use_separate_color(false);
   opts.set_xla_gpu_require_exclusive_lock(false);
@@ -178,6 +179,7 @@ DebugOptions DefaultDebugOptionsIgnoringFlags() {
   sol_estimator_defaults->emplace(
       "nccl_op_launch_us",
       absl::StrCat(static_cast<int>(100.0f * kDefaultNcclCostModelCoeff)));
+  // GBytes per second = 10^9 bytes per second
   sol_estimator_defaults->emplace(
       "nic_speed_gbps",
       absl::StrCat(static_cast<int>(55.56f * kDefaultNcclCostModelCoeff)));
@@ -232,7 +234,7 @@ DebugOptions DefaultDebugOptionsIgnoringFlags() {
   opts.set_xla_gpu_exhaustive_tiling_search(false);
 
   opts.set_xla_gpu_experimental_enable_triton_heroless_priority_fusion(false);
-  opts.set_xla_gpu_experimental_enable_triton_i4_rewrites(false);
+  opts.set_xla_gpu_experimental_enable_triton_i4_rewrites(true);
 
   opts.set_xla_gpu_auto_spmd_partitioning_memory_budget_gb(0);
   opts.set_xla_gpu_auto_spmd_partitioning_memory_budget_ratio(1.1);
@@ -323,7 +325,7 @@ DebugOptions DefaultDebugOptionsIgnoringFlags() {
   opts.set_xla_pjrt_allow_auto_layout_in_hlo(false);
   opts.set_xla_gpu_enable_scatter_determinism_expander(true);
   opts.set_xla_gpu_unsupported_enable_ragged_all_to_all_decomposer(false);
-  opts.set_xla_gpu_experimental_pack_dot_operands_along_k_dimension(false);
+  opts.set_xla_gpu_experimental_pack_dot_operands_along_k_dimension(true);
   return opts;
 }
 
@@ -1540,6 +1542,14 @@ void MakeDebugOptionsFlags(std::vector<tsl::Flag>* flag_list,
       "NCCL collectives are issued concurrently at the cost of more GPU memory"
       " usage."));
   flag_list->push_back(tsl::Flag(
+      "xla_gpu_nccl_init_max_rank_per_root_ratio",
+      int64_setter_for(
+          &DebugOptions::set_xla_gpu_nccl_init_max_rank_per_root_ratio),
+      debug_options->xla_gpu_nccl_init_max_rank_per_root_ratio(),
+      "Maximum number of ranks associated with a root rank to initialize a "
+      "NCCL communicator via ncclCommInitRankScalable. "
+      "A value of zero will lead to a single root."));
+  flag_list->push_back(tsl::Flag(
       "xla_gpu_redzone_scratch_max_megabytes",
       int64_setter_for(
           &DebugOptions::set_xla_gpu_redzone_scratch_max_megabytes),
@@ -1633,8 +1643,8 @@ void MakeDebugOptionsFlags(std::vector<tsl::Flag>* flag_list,
       "estimator precision; comma-separated list of 'key=val' "
       "strings (=val may be omitted); no whitespace around commas."
       "Available options: "
-      "--xla_gpu_analytical_latency_estimator_options='nccl_op_launch_ms=55,"
-      "nic_speed_gbps=40,chunk_prep_ms=1,rtt_ms=2,gpus_per_node=4,"
+      "--xla_gpu_analytical_latency_estimator_options='nccl_op_launch_us=55,"
+      "nic_speed_gbps=40,chunk_prep_us=1,rtt_us=2,gpus_per_node=4,"
       "chunk_size_bytes=1024'"));
   flag_list->push_back(tsl::Flag(
       "xla_gpu_pgle_profile_file_or_directory_path",

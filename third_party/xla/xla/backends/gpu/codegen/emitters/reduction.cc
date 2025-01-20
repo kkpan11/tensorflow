@@ -46,8 +46,9 @@ limitations under the License.
 #include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LLVM.h"
+#include "xla/backends/gpu/codegen/emitters/ir/xla_gpu_ops.h"
 #include "xla/backends/gpu/codegen/emitters/reduction_base.h"
-#include "xla/backends/gpu/codegen/ir/xla_gpu_ops.h"
+#include "xla/backends/gpu/codegen/fusion_emitter.h"
 #include "xla/codegen/emitters/computation_partitioner.h"
 #include "xla/codegen/emitters/elemental_hlo_to_mlir.h"
 #include "xla/codegen/emitters/type_util.h"
@@ -56,7 +57,6 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/utils/hlo_traversal.h"
-#include "xla/service/gpu/fusions/fusion_emitter.h"
 #include "xla/service/gpu/hlo_fusion_analysis.h"
 #include "xla/service/gpu/ir_emission_utils.h"
 #include "xla/service/gpu/launch_dimensions.h"
@@ -207,7 +207,14 @@ PerThreadOutputs ReductionFusion::EmitterState::EmitPerThreadElements(
       reduce_args.append(ProvideParameterRange(computation, reduction, 0, arity,
                                                indices, call_target,
                                                entry_function, nested_b));
-      const auto& reducer = GetReducer(reduction);
+      auto reducer = GetReducer(reduction);
+      // Annotate all AddF ops in the reducer with the no signed zeros fastmath
+      // flag. This allows to fold the initial add with the zero init constant.
+      auto no_signed_zeros = mlir::arith::FastMathFlagsAttr::get(
+          nested_b.getContext(), mlir::arith::FastMathFlags::nsz);
+      reducer.walk([&](mlir::arith::AddFOp addf) {
+        addf->setAttr("fastmath", no_signed_zeros);
+      });
       absl::c_copy(
           nested_b.create<PureCallOp>(reducer, reduce_args).getResults(),
           results.begin() + start);
