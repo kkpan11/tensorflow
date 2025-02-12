@@ -3,12 +3,14 @@
 #
 # copybara:uncomment_end
 load("//tensorflow/lite/experimental/litert/build_common:litert_build_defs.bzl", "export_lrt_runtime_only_linkopt", "export_lrt_runtime_only_script")
+load("//tensorflow/lite/experimental/litert/build_common:special_rule.bzl", "gles_deps", "gles_linkopts")
 
 package(
     # copybara:uncomment default_applicable_licenses = ["//tensorflow:license"],
     default_visibility = [
         # copybara:uncomment "//third_party/mediapipe/calculators/tensor:__subpackages__",
         # copybara:uncomment "//third_party/odml/infra:__subpackages__",
+        # copybara:uncomment "//third_party/odml/litert:__subpackages__",
         "//tensorflow/lite/experimental/litert:__subpackages__",
     ],
 )
@@ -176,6 +178,12 @@ cc_library(
         "litert_tensor_buffer.h",
         "litert_tensor_buffer_requirements.h",
     ],
+    linkopts = select({
+        "//tensorflow:android": [
+            "-landroid",
+        ],
+        "//conditions:default": [],
+    }) + gles_linkopts(),
     deps = [
         ":litert_common",
         ":litert_event",
@@ -184,7 +192,7 @@ cc_library(
         "//tensorflow/lite/experimental/litert/runtime:tensor_buffer",
         "@com_google_absl//absl/types:span",
         "@opencl_headers",
-    ],
+    ] + gles_deps(),
 )
 
 cc_test(
@@ -192,10 +200,6 @@ cc_test(
     srcs = [
         "litert_tensor_buffer_test.cc",
     ],
-    linkopts = select({
-        "//tensorflow:android": ["-landroid"],
-        "//conditions:default": [],
-    }),
     # require GPU to run OpenCL tests.
     tags = [
         "requires-gpu-nvidia",
@@ -469,7 +473,9 @@ cc_library(
         "//tensorflow/lite/experimental/litert/vendors/c:litert_dispatch.h",
     ],
     linkstatic = 1,
-    deps = ["@opencl_headers"],
+    deps = [
+        "@opencl_headers",
+    ] + gles_deps(),
 )
 
 # copybara:uncomment_begin(google-only)

@@ -1,15 +1,50 @@
 diff --git a/third_party/llvm/workspace.bzl b/third_party/llvm/workspace.bzl
-index 0ca7adb..fae3723 100644
+index a4f1357..1deec6e 100644
 --- a/third_party/llvm/workspace.bzl
 +++ b/third_party/llvm/workspace.bzl
 @@ -4,8 +4,8 @@ load("//third_party:repo.bzl", "tf_http_archive")
  
  def repo(name):
      """Imports LLVM."""
--    LLVM_COMMIT = "cea799afc632879f7d08157108a60c67317829a2"
--    LLVM_SHA256 = "18e5c571e267e0d36087450d4db38015b10e634e51559bb9e7256f57088c43df"
-+    LLVM_COMMIT = "52a02b6d1e0c6b492495ff79a3a06ce93e6180b8"
-+    LLVM_SHA256 = "d3f2e83de83b205276ba54a3039d2e02040eb8f4af3c74c4c4debda1c8bf3797"
+-    LLVM_COMMIT = "ab93bd6959d6d2df1b44c1654938452dc30898b0"
+-    LLVM_SHA256 = "b4a3598e3d76edc37bab6bc6ea798b811aa1115ad31f43c23a14c81a95ad8612"
++    LLVM_COMMIT = "0e779ad4998ef65907502101c5b82ede05ddfa4e"
++    LLVM_SHA256 = "d5c2560b2d9ce3ced7951113f2b5d1ea428665678f4dcb1fb8780eb1219ca615"
  
      tf_http_archive(
          name = name,
+diff --git a/third_party/stablehlo/temporary.patch b/third_party/stablehlo/temporary.patch
+index ef63aa3..b001f25 100755
+--- a/third_party/stablehlo/temporary.patch
++++ b/third_party/stablehlo/temporary.patch
+@@ -203,6 +203,30 @@ diff --ruN a/stablehlo/stablehlo/conversions/tosa/transforms/StablehloLegalizeTo
+  
+      return success();
+    }
++diff --ruN a/stablehlo/stablehlo/conversions/tosa/transforms/StablehloLegalizeToTosa.pdll b/stablehlo/stablehlo/conversions/tosa/transforms/StablehloLegalizeToTosa.pdll
++--- stablehlo/stablehlo/conversions/tosa/transforms/StablehloLegalizeToTosa.pdll
+++++ stablehlo/stablehlo/conversions/tosa/transforms/StablehloLegalizeToTosa.pdll
++@@ -21,9 +21,8 @@
++   return RankedTensorType::get(tensorType.getShape(), rewriter.getI1Type());
++ }];
++ 
++-Rewrite changeElementTypeToI8(type: Type) -> Type [{
++-  auto tensorType = llvm::cast<mlir::RankedTensorType>(type);
++-  return RankedTensorType::get(tensorType.getShape(), rewriter.getI8Type());
+++Rewrite getScalarInt8Tensor() -> Type [{
+++  return RankedTensorType::get({1}, rewriter.getI8Type());
++ }];
++ 
++ Rewrite zerosLike(op: Op, type: Type) -> Op [{
++@@ -159,7 +158,7 @@
++   let root = op<stablehlo.multiply>(input0 : Value<inputType: Tosa_Tensor>,
++                             input1 : Value<_: Tosa_Tensor>);
++   rewrite root with {
++-    let typei8 = changeElementTypeToI8(inputType);
+++    let typei8 = getScalarInt8Tensor();
++     let zeros = zerosLike(root, typei8);
++     let mulResult = op<tosa.mul>(input0, input1, zeros) -> (inputType);
++     replace root with mulResult;
+ diff --ruN a/stablehlo/stablehlo/dialect/Base.cpp b/stablehlo/stablehlo/dialect/Base.cpp
+ --- stablehlo/stablehlo/dialect/Base.cpp
+ +++ stablehlo/stablehlo/dialect/Base.cpp

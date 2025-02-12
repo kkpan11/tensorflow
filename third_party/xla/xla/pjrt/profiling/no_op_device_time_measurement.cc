@@ -1,4 +1,4 @@
-/* Copyright 2017 The OpenXLA Authors.
+/* Copyright 2025 The OpenXLA Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,22 +13,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef XLA_CLIENT_GLOBAL_DATA_H_
-#define XLA_CLIENT_GLOBAL_DATA_H_
+#include "xla/pjrt/profiling/no_op_device_time_measurement.h"
 
+#include <cstdint>
 #include <memory>
-#include <vector>
+#include <optional>
 
-#include "absl/types/span.h"
-#include "xla/service/service.h"
-#include "xla/xla.pb.h"
-#include "xla/xla_data.pb.h"
+#include "absl/time/time.h"
+#include "xla/pjrt/profiling/device_time_measurement.h"
 
 namespace xla {
 
-// TODO(cheshire): Remove.
-// Deprecated target for backwards compatibility.
+std::unique_ptr<DeviceTimeMeasurement> CreateDeviceTimeMeasurement() {
+  return std::make_unique<NoOpDeviceTimeMeasurement>();
+}
+
+std::optional<uint64_t> GetDeviceTimeMeasurementKey() { return std::nullopt; }
+
+void RecordDeviceTimeMeasurement(
+    uint64_t key, absl::Duration elapsed,
+    xla::DeviceTimeMeasurement::DeviceType device_type) {}
 
 }  // namespace xla
-
-#endif  // XLA_CLIENT_GLOBAL_DATA_H_

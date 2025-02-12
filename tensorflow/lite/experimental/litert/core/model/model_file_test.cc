@@ -146,6 +146,16 @@ TEST(ModelLoadTest, BadFileData) {
   // NOLINTEND
 }
 
+TEST(ModelLoadTest, GetCustomOpCode) {
+  auto model = litert::testing::LoadTestFileModel("simple_model_npu.tflite");
+  ASSERT_TRUE(model);
+  const auto& litert_model = *model.Get();
+  const auto& op = *litert_model.MainSubgraph()->Ops().front();
+  auto custom_op_code = GetCustomOpCode(litert_model, op);
+  ASSERT_TRUE(custom_op_code.has_value());
+  EXPECT_EQ(*custom_op_code, "DISPATCH_OP");
+}
+
 TEST(ModelLoadTest, WithMetadata) {
   constexpr static absl::string_view kMetadataName = "an_soc_manufacturer";
   constexpr static absl::string_view kMetadataData = "My_Meta_Data";
@@ -249,6 +259,13 @@ TEST(ModelLoadTest, WithOffsetTensorBuffer) {
   const auto& weights_buffer =
       litert_model->get()->Subgraph(0).Tensor(0).Weights();
   EXPECT_EQ(weights_buffer.Buffer().StrView(), kTensorData);
+
+  // All tensors in the first subgraph should have the same buffer manager as
+  // the model.
+  for (auto* tensor : litert_model->get()->Subgraph(0).Tensors()) {
+    EXPECT_EQ(tensor->Weights().GetBufferManager(),
+              litert_model->get()->Buffers());
+  }
 }
 
 TEST(ModelSerializeTest, WithOffsetTensorBuffer) {

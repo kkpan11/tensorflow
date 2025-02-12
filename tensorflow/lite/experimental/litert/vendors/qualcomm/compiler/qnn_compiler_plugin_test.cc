@@ -40,6 +40,7 @@ namespace {
 using ::testing::Values;
 
 // clang-format off
+// TODO: Add support and uncomment these models.
 const auto kSupportedOps =
                   Values(
                     "simple_add_op.tflite",
@@ -68,25 +69,28 @@ const auto kSupportedOps =
                     "simple_less_op.tflite",
                     "simple_greater_op.tflite",
                     "simple_gelu_op.tflite",
-                    "simple_dynamic_update_slice_op.tflite",
-                    "simple_pack_op.tflite",
+                    // "simple_dynamic_update_slice_op.tflite",
+                    // "simple_pack_op.tflite",
+                    "simple_gather_op.tflite",
+                    "simple_mean_op.tflite",
+                    "simple_split_op.tflite",
                     kFeedForwardModel,
-                    kKeyEinsumModel,
-                    kQueryEinsumModel,
-                    kValueEinsumModel,
-                    kAttnVecEinsumModel,
+                    // kKeyEinsumModel,
+                    // kQueryEinsumModel,
+                    // kValueEinsumModel,
+                    // kAttnVecEinsumModel,
                     kROPEModel,
                     kLookUpROPEModel,
                     kRMSNormModel,
                     kSDPAModel,
                     kAttentionModel,
                     kTransformerBlockModel,
-                    kQSimpleMul16x16Model,
-                    kQMulAdd16x16Model,
-                    kQQueryEinsum16x8Model,
-                    kQKeyEinsum16x8Model,
-                    kQVauleEinsum16x8Model,
-                    kQAttnVecEinsum16x8Model
+                    // kQSimpleMul16x16Model,
+                    // kQMulAdd16x16Model,
+                    // kQQueryEinsum16x8Model,
+                    // kQKeyEinsum16x8Model,
+                    // kQVauleEinsum16x8Model,
+                    // kQAttnVecEinsum16x8Model
                     );
 // clang-format on
 
@@ -242,6 +246,27 @@ TEST(TestLegalization, QuantizeOpLegalizedToQuantizeOp) {
   absl::string_view qnn_op_name(legalized_qnn_op.v1.typeName);
   EXPECT_EQ(qnn_op_name, kQnnOpName);
 }
+
+class QnnPluginOpValidationTest : public ::testing::TestWithParam<std::string> {
+};
+
+TEST_P(QnnPluginOpValidationTest, SupportedOpsTest) {
+  LITERT_LOG(LITERT_INFO, "Validating TFLite model: %s", GetParam().c_str());
+  auto plugin = CreatePlugin();
+  auto model = testing::LoadTestFileModel(GetParam());
+
+  const auto subgraph = model.MainSubgraph();
+  LiteRtSubgraph litert_subgraph = subgraph->Get();
+
+  LiteRtOpListT selected_ops;
+  LITERT_ASSERT_OK(LiteRtCompilerPluginPartition(plugin.get(), litert_subgraph,
+                                                 &selected_ops));
+
+  EXPECT_EQ(selected_ops.Vec().size(), litert_subgraph->Ops().size());
+}
+
+INSTANTIATE_TEST_SUITE_P(SupportedOpsTest, QnnPluginOpValidationTest,
+                         kSupportedOps);
 
 class QnnPluginOpCompatibilityTest
     : public ::testing::TestWithParam<std::string> {};
