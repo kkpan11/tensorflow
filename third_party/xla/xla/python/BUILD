@@ -39,7 +39,6 @@ pytype_strict_library(
     name = "xla_client",
     srcs = ["xla_client.py"],
     pytype_srcs = ["xla_client.pyi"],
-    srcs_version = "PY3",
     visibility = ["//visibility:public"],
     deps = [
         ":xla_extension",  # buildcleaner: keep
@@ -69,7 +68,6 @@ tsl_pybind_extension(
 py_strict_test(
     name = "xla_client_backend_independent_test",
     srcs = ["xla_client_backend_independent_test.py"],
-    python_version = "PY3",
     tags = ["no_oss"],  # TODO(phawkins): This test passes, but requires --config=monolithic.
     deps = [
         ":xla_client",
@@ -85,7 +83,6 @@ py_strict_library(
     name = "xla_client_test",
     testonly = 1,
     srcs = ["xla_client_test.py"],
-    srcs_version = "PY3",
     visibility = [":friends"],
     deps = [
         ":xla_client",
@@ -105,8 +102,6 @@ py_strict_test(
         "XLA_FLAGS": "--xla_force_host_platform_device_count=4",
     },
     main = "xla_client_test.py",
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = [
         "no_oss",
         "not_run:arm",
@@ -126,8 +121,6 @@ py_strict_test(
 py_strict_test(
     name = "weakref_lru_cache_test",
     srcs = ["weakref_lru_cache_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = ["no_oss"],  # TODO(phawkins): This test passes, but requires --config=monolithic.
     deps = [
         ":xla_client",
@@ -143,8 +136,6 @@ py_strict_test(
     srcs = ["xla_client_test.py"],
     args = ["--backend=gpu"],
     main = "xla_client_test.py",
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = [
         "no_oss",
         "requires-gpu-nvidia",
@@ -184,8 +175,6 @@ py_strict_test(
     name = "status_casters_test",
     srcs = ["status_casters_test.py"],
     main = "status_casters_test.py",
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = ["no_oss"],
     deps = [
         ":status_casters_ext",
@@ -307,7 +296,6 @@ cc_library(
         "py_device.cc",
         "py_device_list.cc",
         "py_executable.cc",
-        "py_host_callback.cc",
         "py_memory_space.cc",
         "py_program.cc",
         "py_values.cc",
@@ -321,7 +309,6 @@ cc_library(
         "py_device.h",
         "py_device_list.h",
         "py_executable.h",
-        "py_host_callback.h",
         "py_memory_space.h",
         "py_program.h",
         "py_values.h",
@@ -344,6 +331,8 @@ cc_library(
         ":nb_helpers",
         ":nb_numpy",
         ":pprof_profile_builder",
+        ":py_client_cpu",
+        ":py_host_callback",
         ":py_host_callback_proto_cc",
         ":python_ref_manager",
         ":traceback",
@@ -403,6 +392,7 @@ cc_library(
         "//xla/pjrt:transpose",
         "//xla/pjrt/distributed",
         "//xla/pjrt/distributed:client",
+        "//xla/python/compile_only_ifrt:client",
         "//xla/python/ifrt",
         "//xla/python/ifrt:attribute_map",
         "//xla/python/ifrt:custom_call_program",
@@ -439,6 +429,48 @@ cc_library(
 )
 
 cc_library(
+    name = "py_host_callback",
+    srcs = ["py_host_callback.cc"],
+    hdrs = ["py_host_callback.h"],
+    compatible_with = [],
+    copts = [
+        "-fexceptions",
+        "-fno-strict-aliasing",
+    ],
+    features = ["-use_header_modules"],
+    deps = [
+        ":callback",
+        ":py_host_callback_proto_cc",
+        ":python_ref_manager",
+        ":types",
+        "//xla:shape_util",
+        "//xla:status_macros",
+        "//xla:util",
+        "//xla:xla_data_proto_cc",
+        "//xla/ffi",
+        "//xla/ffi:ffi_api",
+        "//xla/pjrt:host_callback",
+        "//xla/pjrt:pjrt_compiler",
+        "//xla/python/ifrt",
+        "//xla/python/pjrt_ifrt",
+        "//xla/python/pjrt_ifrt:xla_host_callback_proto_cc",
+        "//xla/tsl/concurrency:ref_count",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@llvm-project//llvm:Support",
+        "@nanobind",
+    ] + if_google([
+        "@com_google_protobuf//:any_cc_proto",
+    ]),
+)
+
+cc_library(
     name = "callback",
     srcs = [
         "callback.cc",
@@ -457,6 +489,7 @@ cc_library(
         ":python_ref_manager",
         "//xla:comparison_util",
         "//xla:xla_data_proto_cc",
+        "//xla/ffi",
         "//xla/pjrt:host_callback",
         "//xla/pjrt:transpose",
         "//xla/service:custom_call_status",
@@ -469,6 +502,46 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@local_config_python//:python_headers",  # buildcleaner: keep
+        "@nanobind",
+    ],
+)
+
+cc_library(
+    name = "py_client_cpu",
+    srcs = ["py_client_cpu.cc"],
+    hdrs = ["py_client_cpu.h"],
+    compatible_with = [],
+    copts = [
+        "-fexceptions",
+        "-fno-strict-aliasing",
+    ],
+    features = ["-use_header_modules"],
+    deps = [
+        ":callback",
+        ":nb_numpy",
+        ":py_host_callback",
+        ":types",
+        "//xla:comparison_util",
+        "//xla:shape_util",
+        "//xla/ffi",
+        "//xla/ffi:ffi_api",
+        "//xla/pjrt:exceptions",
+        "//xla/pjrt:host_callback",
+        "//xla/pjrt:transpose",
+        "//xla/python/ifrt",
+        "//xla/service:custom_call_status",
+        "//xla/service:custom_call_target_registry",
+        "//xla/service:platform_util",
+        "//xla/tsl/concurrency:ref_count",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@llvm-project//llvm:Support",
+        "@local_tsl//tsl/platform:errors",
         "@nanobind",
     ],
 )
@@ -495,19 +568,31 @@ cc_library(
     deps = [
         ":callback",
         ":nb_numpy",
+        ":py_host_callback",
+        ":types",
         "//xla:comparison_util",
+        "//xla:shape_util",
+        "//xla/ffi",
+        "//xla/ffi:ffi_api",
         "//xla/pjrt:exceptions",
         "//xla/pjrt:host_callback",
         "//xla/pjrt:transpose",
+        "//xla/python/ifrt",
         "//xla/service:custom_call_status",
         "//xla/service:custom_call_target_registry",
         "//xla/service:platform_util",
+        "//xla/tsl/concurrency:ref_count",
         "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@llvm-project//llvm:Support",
         "@nanobind",
     ] + if_rocm(
         ["@local_config_rocm//rocm:rocm_headers"],
@@ -824,8 +909,6 @@ cc_library(
 py_strict_test(
     name = "pytree_test",
     srcs = ["pytree_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = ["no_oss"],  # TODO(phawkins): This test passes, but requires --config=monolithic.
     deps = [
         ":xla_client",
@@ -898,8 +981,6 @@ cc_library(
 py_strict_test(
     name = "config_test",
     srcs = ["config_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = ["no_oss"],  # TODO(phawkins): This test passes, but requires --config=monolithic.
     deps = [
         ":xla_client",
@@ -1395,7 +1476,7 @@ xla_cc_test(
         "//xla/tsl/profiler/utils:file_system_utils",
         "//xla/tsl/profiler/utils:xplane_builder",
         "//xla/tsl/profiler/utils:xplane_schema",
-        "@com_google_googletest//:gtest_main",
+        "@com_google_googletest//:gtest",
         "@local_tsl//tsl/profiler/protobuf:profiled_instructions_proto_cc_impl",
         "@local_tsl//tsl/profiler/protobuf:xplane_proto_cc",
     ],
@@ -1507,7 +1588,7 @@ xla_cc_test(
         "//xla/tsl/platform:test",
         "//xla/tsl/platform:test_main",
         "@com_google_absl//absl/types:span",
-        "@com_google_googletest//:gtest_main",
+        "@com_google_googletest//:gtest",
         "@local_tsl//tsl/profiler/protobuf:profiled_instructions_proto_cc",
         "@local_tsl//tsl/profiler/protobuf:profiled_instructions_proto_cc_impl",
     ],
@@ -1517,8 +1598,6 @@ py_strict_test(
     name = "jax_jit_test",
     srcs = ["jax_jit_test.py"],
     main = "jax_jit_test.py",
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = [
         "no_oss",
         "not_run:arm",
@@ -1538,8 +1617,6 @@ py_strict_test(
     name = "xla_compiler_test",
     srcs = ["xla_compiler_test.py"],
     main = "xla_compiler_test.py",
-    python_version = "PY3",
-    srcs_version = "PY3",
     tags = ["no_oss"],
     deps = [
         ":xla_extension",

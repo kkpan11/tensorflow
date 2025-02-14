@@ -122,7 +122,7 @@ class TestWithModelFactory : public ::testing::TestWithParam<ModelFactory> {
 TEST(ModelLoadTest, BadFilepath) {
   LiteRtModel model = nullptr;
   EXPECT_THAT(LiteRtCreateModelFromFile("bad_path", &model),
-              IsError(kLiteRtStatusErrorFileIO));
+              IsError(kLiteRtStatusErrorNotFound));
 }
 
 TEST(ModelLoadTest, BadFileData) {
@@ -144,6 +144,16 @@ TEST(ModelLoadTest, BadFileData) {
   EXPECT_THAT(LiteRtCreateModelFromFile(test_file_path.c_str(), &model),
               IsError(kLiteRtStatusErrorInvalidFlatbuffer));
   // NOLINTEND
+}
+
+TEST(ModelLoadTest, GetCustomOpCode) {
+  auto model = litert::testing::LoadTestFileModel("simple_model_npu.tflite");
+  ASSERT_TRUE(model);
+  const auto& litert_model = *model.Get();
+  const auto& op = *litert_model.MainSubgraph()->Ops().front();
+  auto custom_op_code = GetCustomOpCode(litert_model, op);
+  ASSERT_TRUE(custom_op_code.has_value());
+  EXPECT_EQ(*custom_op_code, "DISPATCH_OP");
 }
 
 TEST(ModelLoadTest, WithMetadata) {
@@ -249,6 +259,13 @@ TEST(ModelLoadTest, WithOffsetTensorBuffer) {
   const auto& weights_buffer =
       litert_model->get()->Subgraph(0).Tensor(0).Weights();
   EXPECT_EQ(weights_buffer.Buffer().StrView(), kTensorData);
+
+  // All tensors in the first subgraph should have the same buffer manager as
+  // the model.
+  for (auto* tensor : litert_model->get()->Subgraph(0).Tensors()) {
+    EXPECT_EQ(tensor->Weights().GetBufferManager(),
+              litert_model->get()->Buffers());
+  }
 }
 
 TEST(ModelSerializeTest, WithOffsetTensorBuffer) {
@@ -779,6 +796,9 @@ TEST_P(MultiSubgraphDupeConstTest, CheckGraph) {
     Tensor t(&cst);
     EXPECT_THAT(*t.WeightsData<float>(), ElementsAreArray(kWeights));
   }
+  auto buf_id_0 = model.Subgraph(0).Op(0).Input(1).Weights().GetBufferId();
+  auto buf_id_1 = model.Subgraph(1).Op(0).Input(1).Weights().GetBufferId();
+  ASSERT_EQ(buf_id_0, buf_id_1);
 }
 
 INSTANTIATE_TEST_SUITE_P(ModelLoadTests, MultiSubgraphDupeConstTest,
@@ -787,7 +807,7 @@ INSTANTIATE_TEST_SUITE_P(ModelLoadTests, MultiSubgraphDupeConstTest,
 INSTANTIATE_TEST_SUITE_P(ModelSerializeTests, MultiSubgraphDupeConstTest,
                          Values(MakeRoundTripFactory(kCstMultiSubgraph)));
 
-// Tests that programatically check litert against tflite models.
+// Tests that programmatically check litert against tflite models.
 //===---------------------------------------------------------------------------
 
 using ModelLoadOpCheckTest = TestWithModelPath;

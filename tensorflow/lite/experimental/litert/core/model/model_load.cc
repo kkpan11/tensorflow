@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
 #include "tensorflow/lite/experimental/litert/c/litert_common.h"
 #include "tensorflow/lite/experimental/litert/c/litert_logging.h"
@@ -42,6 +43,10 @@ namespace {
 // Provides a view of model-level resources when constructing litert graph.
 class FlatbufferContext {
  public:
+  using LiteRtBufferId = uint32_t;
+  using TflBufferInd = uint32_t;
+  using BufferIdMap = absl::flat_hash_map<TflBufferInd, LiteRtBufferId>;
+
   FlatbufferContext(const FlatbufferWrapper& tfl_flatbuffer,
                     BufferManager* buffer_manager)
       : tfl_flatbuffer_(tfl_flatbuffer), buffer_manager_(buffer_manager) {}
@@ -71,9 +76,12 @@ class FlatbufferContext {
     return tfl_flatbuffer_.PackedModel();
   }
 
+  BufferIdMap& RegisteredTflBufferIds() { return registered_tfl_buffer_ids_; }
+
  private:
   const FlatbufferWrapper& tfl_flatbuffer_;
   BufferManager* buffer_manager_;
+  BufferIdMap registered_tfl_buffer_ids_;
 };
 
 LiteRtStatus UnpackOp(FlatbufferContext& context, LiteRtSubgraphT& parent,
@@ -165,10 +173,6 @@ Expected<BufferRef<uint8_t>> ReadBuffer(FlatbufferContext& context,
 LiteRtStatus UnpackTensor(FlatbufferContext& context,
                           const TflPackedTensor& tfl_tensor,
                           LiteRtTensorT& litert_tensor) {
-  // WEIGHTS
-
-  litert_tensor.Weights().SetBufferManager(context.GetBufferManager());
-
   const auto buffer_ind = tfl_tensor.buffer();
   if (buffer_ind != 0) {
     auto buffer = ReadBuffer(context, buffer_ind);
@@ -176,7 +180,14 @@ LiteRtStatus UnpackTensor(FlatbufferContext& context,
       return buffer.Error().Status();
     }
 
-    SetWeightsFromUnownedBuffer(litert_tensor.Weights(), *buffer);
+    auto it = context.RegisteredTflBufferIds().find(buffer_ind);
+    if (it != context.RegisteredTflBufferIds().end()) {
+      litert_tensor.Weights().SetBufferId(it->second);
+    } else {
+      SetWeightsFromUnownedBuffer(litert_tensor.Weights(), *buffer);
+      context.RegisteredTflBufferIds()[buffer_ind] =
+          litert_tensor.Weights().GetBufferId();
+    }
   }
 
   // TENSOR TYPE
