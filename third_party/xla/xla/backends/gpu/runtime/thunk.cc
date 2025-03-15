@@ -44,7 +44,6 @@ limitations under the License.
 #include "xla/service/gpu/gpu_executable_run_options.h"
 #include "xla/service/service_executable_run_options.h"
 #include "xla/stream_executor/stream.h"
-#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -100,6 +99,18 @@ absl::StatusOr<size_t> Thunk::CollectiveCliques::num_communicators(
   }
 
   return (*clique->second)->num_communicators();
+}
+
+absl::StatusOr<bool> Thunk::CollectiveCliques::peer_access_enabled(
+    const GpuCliqueKey& clique_key) const {
+  // Check that we locked access to a clique for `clique_key`.
+  auto clique = cliques_map_.find(clique_key);
+  if (clique == cliques_map_.end()) {
+    return absl::NotFoundError(absl::StrCat("No clique found for clique key: ",
+                                            clique_key.ToString()));
+  }
+
+  return (*clique->second)->peer_access_enabled();
 }
 
 //===----------------------------------------------------------------------===//
@@ -250,10 +261,22 @@ Thunk::ExecuteParams::ExecuteParams(
     return #x
   switch (kind) {
     // # go/keep-sorted start
+    CASE(kAllGather);
+    CASE(kAllGatherDone);
+    CASE(kAllGatherStart);
     CASE(kAllReduce);
     CASE(kAllReduceDone);
     CASE(kAllReduceStart);
+    CASE(kAllToAll);
+    CASE(kAllToAllDone);
+    CASE(kAllToAllStart);
     CASE(kCholesky);
+    CASE(kCollectiveBroadcast);
+    CASE(kCollectiveBroadcastDone);
+    CASE(kCollectiveBroadcastStart);
+    CASE(kCollectivePermute);
+    CASE(kCollectivePermuteDone);
+    CASE(kCollectivePermuteStart);
     CASE(kCommandBuffer);
     CASE(kConditional);
     CASE(kConvolution);
@@ -268,6 +291,8 @@ Thunk::ExecuteParams::ExecuteParams(
     CASE(kDynamicSlice);
     CASE(kFft);
     CASE(kGemm);
+    CASE(kGroupDone);
+    CASE(kGroupStart);
     CASE(kHostRecv);
     CASE(kHostRecvDone);
     CASE(kHostSend);
@@ -276,34 +301,20 @@ Thunk::ExecuteParams::ExecuteParams(
     CASE(kKernel);
     CASE(kMemset32BitValue);
     CASE(kMemzero);
-    CASE(kNcclAllGather);
-    CASE(kNcclAllGatherDone);
-    CASE(kNcclAllGatherStart);
-    CASE(kNcclAllToAll);
-    CASE(kNcclAllToAllDone);
-    CASE(kNcclAllToAllStart);
-    CASE(kNcclCollectiveBroadcast);
-    CASE(kNcclCollectiveBroadcastDone);
-    CASE(kNcclCollectiveBroadcastStart);
-    CASE(kNcclCollectivePermute);
-    CASE(kNcclCollectivePermuteDone);
-    CASE(kNcclCollectivePermuteStart);
-    CASE(kNcclGroupDone);
-    CASE(kNcclGroupStart);
-    CASE(kNcclRaggedAllToAll);
-    CASE(kNcclRaggedAllToAllDone);
-    CASE(kNcclRaggedAllToAllStart);
-    CASE(kNcclRecv);
-    CASE(kNcclRecvDone);
-    CASE(kNcclReduceScatter);
-    CASE(kNcclReduceScatterDone);
-    CASE(kNcclReduceScatterStart);
-    CASE(kNcclSend);
-    CASE(kNcclSendDone);
     CASE(kNorm);
     CASE(kOutfeed);
     CASE(kPartitionId);
+    CASE(kRaggedAllToAll);
+    CASE(kRaggedAllToAllDone);
+    CASE(kRaggedAllToAllStart);
+    CASE(kRecv);
+    CASE(kRecvDone);
+    CASE(kReduceScatter);
+    CASE(kReduceScatterDone);
+    CASE(kReduceScatterStart);
     CASE(kReplicaId);
+    CASE(kSend);
+    CASE(kSendDone);
     CASE(kSequential);
     CASE(kTriangularSolve);
     CASE(kWaitForStreams);
@@ -331,8 +342,7 @@ std::ostream& operator<<(std::ostream& os, Thunk::Kind kind) {
 
 bool IsReductionCollective(Thunk::Kind kind) {
   return kind == Thunk::kAllReduce || kind == Thunk::kAllReduceStart ||
-         kind == Thunk::kNcclReduceScatter ||
-         kind == Thunk::kNcclReduceScatterStart;
+         kind == Thunk::kReduceScatter || kind == Thunk::kReduceScatterStart;
 }
 
 Thunk::ThunkInfo Thunk::ThunkInfo::WithProfileAnnotation(
@@ -350,33 +360,35 @@ Thunk::ThunkInfo Thunk::ThunkInfo::WithProfileAnnotation(
 
 bool Thunk::IsCollective() const {
   switch (kind()) {
-    case kNcclAllGather:
-    case kNcclAllGatherStart:
-    case kNcclAllGatherDone:
+    // go/keep-sorted start
+    case kAllGather:
+    case kAllGatherDone:
+    case kAllGatherStart:
     case kAllReduce:
-    case kAllReduceStart:
     case kAllReduceDone:
-    case kNcclCollectiveBroadcast:
-    case kNcclCollectiveBroadcastStart:
-    case kNcclCollectiveBroadcastDone:
-    case kNcclCollectivePermute:
-    case kNcclCollectivePermuteStart:
-    case kNcclCollectivePermuteDone:
-    case kNcclReduceScatter:
-    case kNcclReduceScatterStart:
-    case kNcclReduceScatterDone:
-    case kNcclAllToAll:
-    case kNcclAllToAllStart:
-    case kNcclAllToAllDone:
-    case kNcclRaggedAllToAll:
-    case kNcclRaggedAllToAllStart:
-    case kNcclRaggedAllToAllDone:
-    case kNcclSend:
-    case kNcclSendDone:
-    case kNcclRecv:
-    case kNcclRecvDone:
-    case kNcclGroupStart:
-    case kNcclGroupDone:
+    case kAllReduceStart:
+    case kAllToAll:
+    case kAllToAllDone:
+    case kAllToAllStart:
+    case kCollectiveBroadcast:
+    case kCollectiveBroadcastDone:
+    case kCollectiveBroadcastStart:
+    case kCollectivePermute:
+    case kCollectivePermuteDone:
+    case kCollectivePermuteStart:
+    case kGroupDone:
+    case kGroupStart:
+    case kRaggedAllToAll:
+    case kRaggedAllToAllDone:
+    case kRaggedAllToAllStart:
+    case kRecv:
+    case kRecvDone:
+    case kReduceScatter:
+    case kReduceScatterDone:
+    case kReduceScatterStart:
+    case kSend:
+    case kSendDone:
+      // go/keep-sorted end
       return true;
     default:
       return false;
