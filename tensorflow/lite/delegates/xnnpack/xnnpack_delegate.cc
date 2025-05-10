@@ -836,6 +836,8 @@ class Subgraph {
         case kTfLiteBuiltinExpandDims:
         case kTfLiteBuiltinMean:
         case kTfLiteBuiltinPad:
+        case kTfLiteBuiltinReduceMax:
+        case kTfLiteBuiltinReduceMin:
         case kTfLiteBuiltinSum:
         case kTfLiteBuiltinReshape:
         case kTfLiteBuiltinResizeBilinear:
@@ -2199,6 +2201,20 @@ class Subgraph {
                     quantization_params->quantized_dimension, tensor_index,
                     node_index);
                 return kTfLiteError;
+              } else if (tensor.type == kTfLiteInt4 &&
+                         quantization_params->scale->size !=
+                             SizeOfDimension(
+                                 &tensor,
+                                 quantization_params->quantized_dimension)) {
+                // Only per channel quantized 4 bit weights are supported.
+                TF_LITE_MAYBE_KERNEL_LOG(
+                    context,
+                    "4 bit weights must be per channel and not per tensor "
+                    "quantized in channel #%" PRId32
+                    " in tensor #%d in node #%d",
+                    quantization_params->quantized_dimension, tensor_index,
+                    node_index);
+                return kTfLiteError;
               }
               break;
             }
@@ -2851,7 +2867,22 @@ class Subgraph {
                                   node_index, node, context->tensors,
                                   pool_params, input_output_tensors);
       }
-
+      case kTfLiteBuiltinReduceMin: {
+        const TfLiteReducerParams* reducer_params =
+            static_cast<const TfLiteReducerParams*>(node->builtin_data);
+        return VisitReduceNode(BuiltinOperator_MIN, xnn_reduce_min, subgraph,
+                               delegate, logging_context, node_index, node,
+                               context->tensors, reducer_params,
+                               input_output_tensors);
+      }
+      case kTfLiteBuiltinReduceMax: {
+        const TfLiteReducerParams* reducer_params =
+            static_cast<const TfLiteReducerParams*>(node->builtin_data);
+        return VisitReduceNode(BuiltinOperator_MAX, xnn_reduce_max, subgraph,
+                               delegate, logging_context, node_index, node,
+                               context->tensors, reducer_params,
+                               input_output_tensors);
+      }
       case kTfLiteBuiltinSum: {
         const TfLiteReducerParams* reducer_params =
             static_cast<const TfLiteReducerParams*>(node->builtin_data);

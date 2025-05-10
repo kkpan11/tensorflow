@@ -126,6 +126,7 @@ bool DoesOpSupportType(HloOpcode opcode, PrimitiveType type) {
     case HloOpcode::kBatchNormInference:
     case HloOpcode::kBatchNormTraining:
     case HloOpcode::kBatchNormGrad:
+    case HloOpcode::kStochasticConvert:
       return pu::IsFloatingPointType(type);
     default:
       // Returning true by default ensures that newly added ops are not
@@ -2524,6 +2525,50 @@ INSTANTIATE_TEST_SUITE_P(AfterAllSuite, AfterAllTest,
                          ::testing::ValuesIn(AllDevicesToTest()),
                          TritonSupportTestDeviceToString);
 
+using TupleTest = TritonSupportTestWithDeviceParam;
+
+TEST_P(TupleTest, Tuple) {
+  auto cc = GetParam();
+  const std::string kHloTestTemplate = R"(
+    ENTRY triton_computation {
+      p0 = f32[10] parameter(0)
+      p1 = s32[5] parameter(1)
+      ROOT tuple_op = (f32[10], s32[5]) tuple(p0, p1)
+    })";
+  TF_ASSERT_OK_AND_ASSIGN(TestedInstruction ti,
+                          ParseTemplateAndGetInstruction(
+                              kHloTestTemplate,
+                              PRIMITIVE_TYPE_INVALID,  // Type is irrelevant.
+                              HloOpcode::kTuple));
+  RunSupportTestMultipleOutputTiles(std::move(ti),
+                                    /*output_tile_sizes=*/{{1}, {1}}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(TupleSuite, TupleTest,
+                         ::testing::ValuesIn(AllDevicesToTest()),
+                         TritonSupportTestDeviceToString);
+
+using GetTupleElementTest = TritonSupportTestWithDeviceParam;
+
+TEST_P(GetTupleElementTest, GetTupleElement) {
+  auto cc = GetParam();
+  const std::string kHloTestTemplate = R"(
+    ENTRY triton_computation {
+      tuple_op = (f32[10], s32[5]) parameter(0)
+      ROOT gte = f32[10] get-tuple-element(tuple_op), index=0
+    })";
+  TF_ASSERT_OK_AND_ASSIGN(TestedInstruction ti,
+                          ParseTemplateAndGetInstruction(
+                              kHloTestTemplate,
+                              PRIMITIVE_TYPE_INVALID,  // Type is irrelevant.
+                              HloOpcode::kGetTupleElement));
+  RunSupportTest(std::move(ti), /*output_tile_sizes=*/{1}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(GetTupleElementSuite, GetTupleElementTest,
+                         ::testing::ValuesIn(AllDevicesToTest()),
+                         TritonSupportTestDeviceToString);
+
 using CustomCallTest = TritonSupportTestWithDeviceParam;
 
 TEST_P(CustomCallTest, CustomCall) {
@@ -2777,6 +2822,51 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::ValuesIn(AllDevicesToTest())),
     TritonSupportTestTypeAndDeviceToString);
 
+class StochasticConvertTest
+    : public TritonSupportTest,
+      public ::testing::WithParamInterface<
+          std::tuple<PrimitiveType, PrimitiveType, se::GpuComputeCapability>> {
+};
+
+TEST_P(StochasticConvertTest, StochasticConvert) {
+  auto [operand_type, new_element_type, cc] = GetParam();
+
+  PrimitiveType random_type = primitive_util::UnsignedIntegralTypeForBitWidth(
+      primitive_util::BitWidth(operand_type));
+
+  ASSERT_NE(random_type, PRIMITIVE_TYPE_INVALID)
+      << "Could not determine a valid random_type for operand_type: "
+      << PrimitiveType_Name(operand_type);
+
+  const std::string hlo_text = absl::Substitute(
+      R"(
+      ENTRY triton_computation {
+        operand = $0[33,68] parameter(0)
+        random = $1[33,68] parameter(1)
+        ROOT result = $2[33,68] stochastic-convert(operand, random)
+      })",
+      primitive_util::LowercasePrimitiveTypeName(operand_type),
+      primitive_util::LowercasePrimitiveTypeName(random_type),
+      primitive_util::LowercasePrimitiveTypeName(new_element_type));
+
+  TF_ASSERT_OK_AND_ASSIGN(
+      TestedInstruction ti,
+      ParseTemplateAndGetInstruction(
+          hlo_text, PRIMITIVE_TYPE_INVALID,  // Type is irrelevant.
+          HloOpcode::kStochasticConvert));
+
+  RunSupportTest(std::move(ti), /*output_tile_sizes=*/{1, 32}, cc);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    StochasticConvertTestSuite, StochasticConvertTest,
+    ::testing::Combine(
+        ::testing::ValuesIn(AllOpSupportedTypes(
+            HloOpcode::kStochasticConvert)),     // Operand type.
+        ::testing::ValuesIn(AllXlaDataTypes()),  // New element type.
+        ::testing::ValuesIn(AllDevicesToTest())),
+    TritonSupportTestTwoTypesAndDeviceToString);
+
 constexpr std::array kUnsupportedOps = {
     // clang-format off
     // go/keep-sorted start
@@ -2785,7 +2875,6 @@ constexpr std::array kUnsupportedOps = {
     HloOpcode::kDynamicSlice,
     HloOpcode::kDynamicUpdateSlice,
     HloOpcode::kGather,
-    HloOpcode::kGetTupleElement,
     HloOpcode::kPad,
     HloOpcode::kRaggedDot,
     HloOpcode::kRecv,
@@ -2797,10 +2886,8 @@ constexpr std::array kUnsupportedOps = {
     HloOpcode::kSendDone,
     HloOpcode::kSetDimensionSize,
     HloOpcode::kSort,
-    HloOpcode::kStochasticConvert,
     HloOpcode::kTopK,
     HloOpcode::kTriangularSolve,
-    HloOpcode::kTuple,
     // go/keep-sorted end
     // clang-format on
 };
@@ -2842,14 +2929,17 @@ absl::flat_hash_set<HloOpcode> AllTestedOpcodes() {
   ret.emplace(HloOpcode::kDot);
   ret.emplace(HloOpcode::kFft);
   ret.emplace(HloOpcode::kGetDimensionSize);
+  ret.emplace(HloOpcode::kGetTupleElement);
   ret.emplace(HloOpcode::kMap);
   ret.emplace(HloOpcode::kReverse);
   ret.emplace(HloOpcode::kRngBitGenerator);
   ret.emplace(HloOpcode::kRngGetAndUpdateState);
+  ret.emplace(HloOpcode::kTuple);
   ret.emplace(HloOpcode::kWhile);
   ret.emplace(HloOpcode::kFusion);
   ret.emplace(HloOpcode::kInfeed);
   ret.emplace(HloOpcode::kOutfeed);
+  ret.emplace(HloOpcode::kStochasticConvert);
   ret.insert(kUnsupportedOps.begin(), kUnsupportedOps.end());
 
   return ret;

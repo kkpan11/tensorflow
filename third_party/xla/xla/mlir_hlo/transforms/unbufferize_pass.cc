@@ -23,13 +23,13 @@ limitations under the License.
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/LogicalResult.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Support/LLVM.h"
-#include "third_party/llvm/llvm-project/llvm/include/llvm/Support/LogicalResult.h"
 #include "transforms/passes.h"
 
 namespace mlir {

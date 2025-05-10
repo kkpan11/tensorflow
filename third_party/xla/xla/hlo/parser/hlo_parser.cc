@@ -558,9 +558,7 @@ class HloParserImpl : public HloParser {
   bool ParseLayoutIntAttribute(int64_t* attr_value,
                                absl::string_view attr_description);
   bool ParseDimLevelTypes(
-      absl::InlinedVector<DimLevelType, InlineRank()>* dim_level_types,
-      absl::InlinedVector<bool, InlineRank()>* dim_unique,
-      absl::InlinedVector<bool, InlineRank()>* dim_ordered);
+      absl::InlinedVector<DimLevelType, InlineRank()>* dim_level_types);
   bool ParseTiles(std::vector<Tile>* tiles);
   bool ParseSplitConfigs(std::vector<SplitConfig>& split_configs);
   bool ParsePhysicalShape(Shape* physical_shape);
@@ -1961,7 +1959,7 @@ HloInstruction* HloParserImpl::CreateInstruction(  // NOLINT
         return nullptr;
       }
       auto is_async_shape_correct = [](const Shape& shape) {
-        return shape.IsTuple() && shape.tuple_shapes_size() >= 2 &&
+        return shape.IsTuple() && shape.tuple_shapes().size() >= 2 &&
                shape.tuple_shapes(0).IsTuple();
       };
       // Verify operand/resulting shapes
@@ -2201,9 +2199,9 @@ HloInstruction* HloParserImpl::CreateInstruction(  // NOLINT
     }
     case HloOpcode::kTuple: {
       if ((!preset_operands &&
-           !(shape.has_value()
-                 ? ParseOperands(&operands, builder, shape->tuple_shapes_size())
-                 : ParseOperands(&operands, builder))) ||
+           !(shape.has_value() ? ParseOperands(&operands, builder,
+                                               shape->tuple_shapes().size())
+                               : ParseOperands(&operands, builder))) ||
           !ParseAttributes(attrs, allow_attributes, shape)) {
         return nullptr;
       }
@@ -5952,9 +5950,7 @@ bool HloParserImpl::ParseDimensionSizes(std::vector<int64_t>* dimension_sizes,
 //   ::= 'C'
 //   ::= 'S'
 bool HloParserImpl::ParseDimLevelTypes(
-    absl::InlinedVector<DimLevelType, InlineRank()>* dim_level_types,
-    absl::InlinedVector<bool, InlineRank()>* dim_unique,
-    absl::InlinedVector<bool, InlineRank()>* dim_ordered) {
+    absl::InlinedVector<DimLevelType, InlineRank()>* dim_level_types) {
   auto parse_and_add_item = [&]() {
     if (lexer_.GetKind() == TokKind::kIdent) {
       bool dim_level_type_valid = false;
@@ -5977,25 +5973,13 @@ bool HloParserImpl::ParseDimLevelTypes(
         dim_level_type_valid = true;
       }
       if (dim_level_type_valid) {
-        bool new_dim_unique = true;
         if (lexer_.GetKind() == TokKind::kPlus) {
-          new_dim_unique = false;
           lexer_.Lex();
         }
-        bool new_dim_ordered = true;
         if (lexer_.GetKind() == TokKind::kTilde) {
-          new_dim_ordered = false;
           lexer_.Lex();
-        }
-        if (!LayoutUtil::ValidateDimLevel(dim_level_type, new_dim_unique,
-                                          new_dim_ordered)) {
-          return Error(
-              lexer_.GetLoc(),
-              "invalid DimLevelType/unique/ordered combination in shape");
         }
         dim_level_types->push_back(dim_level_type);
-        dim_unique->push_back(new_dim_unique);
-        dim_ordered->push_back(new_dim_ordered);
         return true;
       }
     }
@@ -6152,8 +6136,6 @@ bool HloParserImpl::ParseSplitConfigs(std::vector<SplitConfig>& split_configs) {
 bool HloParserImpl::ParseLayout(Layout* layout) {
   absl::InlinedVector<int64_t, InlineRank()> minor_to_major;
   DimLevelTypeVector dim_level_types;
-  absl::InlinedVector<bool, InlineRank()> dim_unique;
-  absl::InlinedVector<bool, InlineRank()> dim_ordered;
   std::vector<Tile> tiles;
   PrimitiveType index_primitive_type = PRIMITIVE_TYPE_INVALID;
   PrimitiveType pointer_primitive_type = PRIMITIVE_TYPE_INVALID;
@@ -6193,7 +6175,7 @@ bool HloParserImpl::ParseLayout(Layout* layout) {
 
       if (lexer_.GetKind() == TokKind::kIdent && lexer_.GetStrVal() == "D") {
         lexer_.Lex();
-        ParseDimLevelTypes(&dim_level_types, &dim_unique, &dim_ordered);
+        ParseDimLevelTypes(&dim_level_types);
       }
 
       if (lexer_.GetKind() == TokKind::kIdent && lexer_.GetStrVal() == "T") {
@@ -6270,7 +6252,7 @@ bool HloParserImpl::ParseLayout(Layout* layout) {
     vec_tiles[i] = Tile(tiles[i]);
   }
   *layout = LayoutUtil::MakeLayout(
-      minor_to_major, dim_level_types, dim_unique, dim_ordered, vec_tiles,
+      minor_to_major, dim_level_types, vec_tiles,
       tail_padding_alignment_in_elements, index_primitive_type,
       pointer_primitive_type, element_size_in_bits, memory_space, split_configs,
       std::move(physical_shape), dynamic_shape_metadata_prefix_bytes);

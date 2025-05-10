@@ -2533,12 +2533,10 @@ DefaultSchedulerCore::GetNumResourcesNeededForAnnotation(
       sched_state.sched_graph.GetOriginalInstrList()[0]->parent();
   for (const HloInstruction* instr :
        annotation_tracker_->GetInstructions(comp, annotation)) {
-    absl::Span<const ResourcePair> rv =
-        sched_state.async_tracker->GetResourcesFromInstruction(*instr);
-    for (const auto& [resource, usage] : rv) {
-      if (usage == ResourceUsageType::kResourceOccupy) {
-        num_resources_needed[resource]++;
-      }
+    auto num_resources_needed_per_instr =
+        sched_state.async_tracker->GetNumResourcesPerInstruction(*instr);
+    for (const auto& [resource, usage] : num_resources_needed_per_instr) {
+      num_resources_needed[resource] += usage;
     }
   }
   return num_resources_needed;
@@ -2946,7 +2944,7 @@ LatencyHidingScheduler::SchedulerStatistics::ToProto() const {
 void LatencyHidingScheduler::LogScheduleStatistics(
     const HloComputation* computation) {
   XLA_VLOG_LINES(
-      1, LatencyHidingStatistics(computation, latency_estimator_.get(),
+      3, LatencyHidingStatistics(computation, latency_estimator_.get(),
                                  async_tracker_.get(), shape_size_bytes_)
              .ToString());
 }
@@ -3015,11 +3013,11 @@ absl::StatusOr<bool> LatencyHidingScheduler::Run(
             << scheduler_core_->GetMemoryPeak()
             << " bytes. Current limit: " << scheduler_core_->GetMemoryLimit();
   for (HloComputation* computation : computations_to_schedule) {
-    VLOG(1) << "[" << name() << "] Statistics before scheduling:";
+    VLOG(3) << "[" << name() << "] Statistics before scheduling:";
     LogScheduleStatistics(computation);
     module->schedule().set_sequence(
         computation, absl::MakeConstSpan(saved_schedules[computation]));
-    VLOG(1) << "[" << name() << "] Statistics after scheduling:";
+    VLOG(3) << "[" << name() << "] Statistics after scheduling:";
     LogScheduleStatistics(computation);
   }
   if (debug_options.xla_dump_latency_hiding_schedule()) {
