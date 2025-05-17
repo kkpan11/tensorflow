@@ -258,8 +258,7 @@ IfrtServingExecutable::Create(
   return executable;
 }
 
-absl::StatusOr<tsl::RCReference<xla::ifrt::Array>>
-IfrtServingExecutable::ConvertTensorToArray(
+absl::StatusOr<xla::ifrt::ArrayRef> IfrtServingExecutable::ConvertTensorToArray(
     const tensorflow::Tensor& tensor,
     const xla::ifrt::DeviceListRef& device_list,
     const xla::OpSharding& sharding) {
@@ -447,7 +446,9 @@ IfrtServingExecutable::CreateExecutableSynchronously(
   TF_ASSIGN_OR_RETURN(
       mlir::OwningOpRef<mlir::ModuleOp> mlir_hlo_module,
       xla::ConvertHloToMlirHlo(*module_copy->getContext(),
-                               &tf2hlo_result.hlo_module_proto));
+                               &tf2hlo_result.hlo_module_proto,
+                               /*import_all_computations=*/false,
+                               /*flatten_computation_args_result=*/true));
 
   if (VLOG_IS_ON(1)) {
     tensorflow::DumpMlirOpToFile("ifrt_after_bridge_phase2",
@@ -523,7 +524,7 @@ IfrtServingExecutable::CreateExecutableSynchronously(
           [&](std::unique_ptr<xla::ifrt::Program> program,
               std::unique_ptr<xla::ifrt::CompileOptions> options)
               -> absl::StatusOr<xla::ifrt::LoadedExecutableRef> {
-            return ifrt_client_->GetDefaultCompiler()->Compile(
+            return ifrt_client_->GetDefaultCompiler()->CompileAndLoad(
                 std::move(program), std::move(options));
           }));
 
@@ -678,7 +679,7 @@ absl::StatusOr<std::vector<tensorflow::Tensor>> IfrtServingExecutable::Execute(
 
   VLOG(2) << "Completed AsyncLoadIfrtArray";
 
-  std::vector<tsl::RCReference<xla::ifrt::Array>> args;
+  std::vector<xla::ifrt::ArrayRef> args;
   args.reserve(inputs.size());
   int variable_index = 0;
   for (int i = 0; i < inputs.size(); i++) {
@@ -701,7 +702,7 @@ absl::StatusOr<std::vector<tensorflow::Tensor>> IfrtServingExecutable::Execute(
       TF_ASSIGN_OR_RETURN(
           auto loaded_variable,
           ifrt_loaded_variable_registry_.GetLoadedVariable(key));
-      TF_ASSIGN_OR_RETURN(tsl::RCReference<xla::ifrt::Array> single_array,
+      TF_ASSIGN_OR_RETURN(xla::ifrt::ArrayRef single_array,
                           loaded_variable.array.Await());
       args.push_back(std::move(single_array));
       variable_index++;
@@ -755,8 +756,7 @@ absl::StatusOr<std::vector<tensorflow::Tensor>> IfrtServingExecutable::Execute(
   output_futures.reserve(execution_result.outputs.size());
   for (int i = 0; i < execution_result.outputs.size(); ++i) {
     tensorflow::TensorShape tensor_shape;
-    const tsl::RCReference<xla::ifrt::Array>& array_for_copy =
-        execution_result.outputs[i];
+    const xla::ifrt::ArrayRef& array_for_copy = execution_result.outputs[i];
     const tpu::TPUCompileMetadataProto::Retval& metadata_retval =
         executable_bundle->compile_metadata.retvals()[i];
 

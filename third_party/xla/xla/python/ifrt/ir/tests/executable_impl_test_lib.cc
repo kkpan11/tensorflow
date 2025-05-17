@@ -77,17 +77,16 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data0 = {0, 1};
   std::vector<int> data1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
+                                  DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -128,17 +127,16 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data_shard0 = {0, 1};
   std::vector<int> data_shard1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data_shard0.data(), data_shard1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data_shard0.data(), data_shard1.data()},
+                                  Shape({2, 2}), DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -178,7 +176,7 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       auto mpmd_executable,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(
               GetDeviceIds(devices), AtomExecutableMap(),
@@ -190,10 +188,9 @@ module {
   std::vector<int> data_shard0 = {0, 1};
   std::vector<int> data_shard1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data_shard0.data(), data_shard1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data_shard0.data(), data_shard1.data()},
+                                  Shape({2, 2}), DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -237,7 +234,7 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       auto mpmd_executable,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(
               GetDeviceIds(devices), AtomExecutableMap(),
@@ -249,10 +246,9 @@ module {
   std::vector<int> data_shard0 = {0, 1};
   std::vector<int> data_shard1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data_shard0.data(), data_shard1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data_shard0.data(), data_shard1.data()},
+                                  Shape({2, 2}), DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -293,7 +289,7 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       auto mpmd_executable,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(
               GetDeviceIds(devices), AtomExecutableMap(),
@@ -305,10 +301,9 @@ module {
   std::vector<int> data_shard0 = {0, 1};
   std::vector<int> data_shard1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data_shard0.data(), data_shard1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data_shard0.data(), data_shard1.data()},
+                                  Shape({2, 2}), DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -358,7 +353,7 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       auto mpmd_executable,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(
               GetDeviceIds(devices), AtomExecutableMap(),
@@ -370,10 +365,9 @@ module {
   std::vector<int> data_shard0 = {0, 1};
   std::vector<int> data_shard1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data_shard0.data(), data_shard1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data_shard0.data(), data_shard1.data()},
+                                  Shape({2, 2}), DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -403,13 +397,13 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data = {1, 2};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
+      ArrayRef input,
       CreateArray({data.data()}, Shape({2}), DType(DType::kS32),
                   ShardingParam({1}, {{0}, {1}}),
                   client_->MakeDeviceList({devices->devices()[0]})));
@@ -450,13 +444,13 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data = {0, 1, 2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
+      ArrayRef input,
       CreateArray({data.data()}, Shape({2, 2}), DType(DType::kS32),
                   ShardingParam({1, 1}, {{0}, {1}}),
                   client_->MakeDeviceList({devices->devices()[0]})));
@@ -499,7 +493,7 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
@@ -538,17 +532,16 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data0 = {0, 1};
   std::vector<int> data1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
+                                  DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -585,17 +578,16 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data0 = {0, 1};
   std::vector<int> data1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
+                                  DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -642,17 +634,16 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data_shard0 = {0, 1};
   std::vector<int> data_shard1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data_shard0.data(), data_shard1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data_shard0.data(), data_shard1.data()},
+                                  Shape({2, 2}), DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -690,17 +681,16 @@ module {
   TF_ASSERT_OK_AND_ASSIGN(DeviceListRef devices, PickDevices(2));
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module),
           std::make_unique<IfrtIRCompileOptions>(GetDeviceIds(devices))));
 
   std::vector<int> data_shard0 = {0, 1};
   std::vector<int> data_shard1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data_shard0.data(), data_shard1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data_shard0.data(), data_shard1.data()},
+                                  Shape({2, 2}), DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions options;
   options.fill_status = true;
@@ -745,7 +735,7 @@ module {
     exec_build_options.set_device_assignment(device_assignment);
   }
   TF_ASSERT_OK_AND_ASSIGN(LoadedExecutableRef child_exec,
-                          client_->GetDefaultCompiler()->Compile(
+                          client_->GetDefaultCompiler()->CompileAndLoad(
                               std::make_unique<HloProgram>(*mhlo_module),
                               std::make_unique<XlaCompileOptions>(
                                   std::move(xla_options), devices)));
@@ -768,16 +758,15 @@ module {
   options->loaded_exec_binding["add_one"] = std::move(child_exec);
   TF_ASSERT_OK_AND_ASSIGN(
       LoadedExecutableRef loaded_exec,
-      client_->GetDefaultCompiler()->Compile(
+      client_->GetDefaultCompiler()->CompileAndLoad(
           std::make_unique<IfrtIRProgram>(*mlir_module), std::move(options)));
 
   std::vector<int> data0 = {0, 1};
   std::vector<int> data1 = {2, 3};
   TF_ASSERT_OK_AND_ASSIGN(
-      tsl::RCReference<Array> input,
-      CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
-                  DType(DType::kS32), ShardingParam({2, 1}, {{0}, {2}}),
-                  devices));
+      ArrayRef input, CreateArray({data0.data(), data1.data()}, Shape({2, 2}),
+                                  DType(DType::kS32),
+                                  ShardingParam({2, 1}, {{0}, {2}}), devices));
 
   ExecuteOptions execute_options;
   execute_options.fill_status = true;

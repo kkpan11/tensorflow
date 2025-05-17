@@ -289,14 +289,8 @@ class PjRtLoadedExecutable final
     return client_;
   }
   absl::StatusOr<ExecuteResult> Execute(
-      absl::Span<tsl::RCReference<Array>> args, const ExecuteOptions& options,
+      absl::Span<ArrayRef> args, const ExecuteOptions& options,
       std::optional<DeviceListRef> devices) override;
-
-  Future<> Delete() override;
-  bool IsDeleted() const override {
-    DCHECK(this);
-    return pjrt_loaded_executable_->IsDeleted();
-  }
 
   absl::Span<Device* const> addressable_devices() const override {
     DCHECK(this);
