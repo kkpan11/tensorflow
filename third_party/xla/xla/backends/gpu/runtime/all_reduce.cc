@@ -24,6 +24,7 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
+#include "xla/core/collectives/rank_id.h"
 #include "xla/primitive_util.h"
 #include "xla/service/gpu/launch_dimensions.h"
 #include "xla/stream_executor/device_memory.h"
@@ -46,8 +47,8 @@ absl::Status LaunchTypedKernel(
     const se::ThreadDim& thread_dims, const se::BlockDim& block_dims,
     const std::array<T*, stream_executor::gpu::kMaxNumAllReduceInputPtrs>&
         input_ptrs,
-    se::DeviceMemoryBase output_buffer, int64_t rank, int64_t num_ranks,
-    int64_t num_elements,
+    se::DeviceMemoryBase local_input_buffer, se::DeviceMemoryBase output_buffer,
+    int64_t rank, int64_t num_ranks, int64_t num_elements,
     const std::array<uint32_t*,
                      stream_executor::gpu::kMaxNumAllReduceInputPtrs>&
         signal_flags_ptrs) {
@@ -56,8 +57,8 @@ absl::Status LaunchTypedKernel(
                           .LoadKernel<se::gpu::AllReduceKernel<T>>(executor));
 
   return kernel.Launch(thread_dims, block_dims, stream, input_ptrs,
-                       output_buffer, rank, num_ranks, num_elements,
-                       signal_flags_ptrs);
+                       local_input_buffer, output_buffer, rank, num_ranks,
+                       num_elements, signal_flags_ptrs);
 }
 }  // namespace
 
@@ -79,11 +80,12 @@ bool IsAllReduceKernelSupported(int64_t num_inputs, int64_t num_elements,
 absl::Status RunAllReduceKernel(
     se::Stream* stream, const LaunchDimensions& launch_dimensions,
     PrimitiveType element_type,
-    absl::Span<const se::DeviceMemoryBase> input_buffers,
-    se::DeviceMemoryBase output_buffer, int64_t rank, int64_t num_ranks,
-    int64_t num_elements,
+    absl::Span<const se::DeviceMemoryBase> remote_input_buffers,
+    se::DeviceMemoryBase local_input_buffer, se::DeviceMemoryBase output_buffer,
+    RankId rank, int64_t num_ranks, int64_t num_elements,
     absl::Span<const se::DeviceMemoryBase> signal_flags_buffers) {
-  if (input_buffers.size() > stream_executor::gpu::kMaxNumAllReduceInputPtrs) {
+  if (remote_input_buffers.size() >
+      stream_executor::gpu::kMaxNumAllReduceInputPtrs) {
     return absl::InvalidArgumentError(
         "Number of input pointers exceeds the maximum supported number of "
         "input pointers.");
@@ -102,16 +104,18 @@ absl::Status RunAllReduceKernel(
   auto launch_kernel = [&](auto type) -> absl::Status {
     using T = decltype(type);
 
-    std::array<T*, stream_executor::gpu::kMaxNumAllReduceInputPtrs> input_ptrs;
-    absl::c_transform(input_buffers, input_ptrs.begin(),
+    std::array<T*, stream_executor::gpu::kMaxNumAllReduceInputPtrs>
+        remote_input_ptrs;
+    absl::c_transform(remote_input_buffers, remote_input_ptrs.begin(),
                       [](se::DeviceMemoryBase buffer) {
                         return tsl::safe_reinterpret_cast<T*>(buffer.opaque());
                       });
 
     return LaunchTypedKernel<T>(
         stream, executor, launch_dimensions.thread_counts_per_block(),
-        launch_dimensions.block_counts(), input_ptrs, output_buffer, rank,
-        num_ranks, num_elements, signal_flags_ptrs);
+        launch_dimensions.block_counts(), remote_input_ptrs, local_input_buffer,
+        output_buffer, rank.value(), num_ranks, num_elements,
+        signal_flags_ptrs);
   };
 
   switch (element_type) {

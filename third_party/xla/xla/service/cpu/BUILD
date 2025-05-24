@@ -972,7 +972,6 @@ cc_library(
         "//xla/backends/cpu/runtime:dot_thunk",
         "//xla/backends/cpu/runtime:fft_thunk",
         "//xla/backends/cpu/runtime:infeed_thunk",
-        "//xla/backends/cpu/runtime:kernel",
         "//xla/backends/cpu/runtime:kernel_thunk",
         "//xla/backends/cpu/runtime:logical_id_thunk",
         "//xla/backends/cpu/runtime:outfeed_thunk",
@@ -1009,7 +1008,6 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@llvm-project//llvm:JITLink",
-        "@llvm-project//llvm:ir_headers",
         "@local_tsl//tsl/platform:casts",
         "@local_tsl//tsl/profiler/lib:traceme",
     ],
@@ -1800,6 +1798,7 @@ tf_proto_library(
     srcs = ["backend_config.proto"],
     protodeps = [
         ":onednn_config_proto",
+        "//xla/backends/cpu:xnnpack_config_proto",
     ],
 )
 

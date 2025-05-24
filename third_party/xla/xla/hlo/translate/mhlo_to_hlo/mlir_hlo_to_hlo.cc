@@ -82,6 +82,7 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/ir/hlo_sharding.h"
 #include "xla/hlo/parser/hlo_parser.h"
+#include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
 #include "xla/hlo/translate/mhlo_to_hlo/attribute_exporter.h"
 #include "xla/hlo/translate/mhlo_to_hlo/layout_util.h"
 #include "xla/hlo/translate/mhlo_to_hlo/literal_exporter.h"
@@ -4178,7 +4179,8 @@ LogicalResult ExportXlaOp(CustomCallOp op, OpLoweringContext ctx) {
       auto name = attr.getName();
       return name == kCallTargetName || name == kBackendConfig ||
              name == kApiVersion || name == kCalledComputations ||
-             name == kHasSideEffect || name == kMhloSharding;
+             name == kHasSideEffect || name == kMhloSharding ||
+             name == kMhloFrontendAttributes;
     };
     for (const auto& attr : op->getAttrs()) {
       if (!isSupportedAttrName(attr))
@@ -5765,7 +5767,7 @@ LogicalResult ConvertToHloModule::RunOnFunction(mlir::func::FuncOp f) {
     absl::Status status = xla::internal::XlaBuilderFriend::SetExecutionThread(
         &module_builder_, computation, execution_thread.str());
     if (!status.ok()) {
-      return f.emitError(status.message());
+      return f.emitError(xla::ToStringRef(status.message()));
     }
   }
   absl::flat_hash_map<int, std::vector<bool>> parameter_replication;
@@ -5784,7 +5786,7 @@ LogicalResult ConvertToHloModule::RunOnFunction(mlir::func::FuncOp f) {
         xla::internal::XlaBuilderFriend::SetParameterReplication(
             &module_builder_, computation, parameter_replication);
     if (!status.ok()) {
-      return f.emitError(status.message());
+      return f.emitError(xla::ToStringRef(status.message()));
     }
   }
   lowered_computation_[f] = computation;
@@ -6055,6 +6057,14 @@ absl::Status PrepareForExport(mlir::ModuleOp module) {
     return hasShapeOps ? WalkResult::interrupt() : WalkResult::advance();
   });
   mlir::PassManager pm(module.getContext());
+
+  // Only enable verifier in debug builds.
+  bool enableVerifier = false;
+#ifndef NDEBUG
+  enableVerifier = true;
+#endif
+  pm.enableVerifier(enableVerifier);
+
   pm.addNestedPass<mlir::func::FuncOp>(mhlo::createPrepareForExportPass());
   if (hasShapeOps) {
     // Experimental support for exporting dynamic MHLO programs to HLO.
@@ -6099,6 +6109,14 @@ absl::Status ConvertMlirHloToHlo(mlir::ModuleOp module,
   // temporarily support StableHLO to MHLO lowering here as well to ensure
   // a smooth migration.
   mlir::PassManager pm(module->getContext());
+
+  // Only enable verifier in debug builds.
+  bool enableVerifier = false;
+#ifndef NDEBUG
+  enableVerifier = true;
+#endif
+  pm.enableVerifier(enableVerifier);
+
   mhlo::StablehloLegalizeToHloPassOptions shlo_pass_opts;
   shlo_pass_opts.convert_xla_supported_stablehlo_ =
       !options.direct_stablehlo_to_hlo;

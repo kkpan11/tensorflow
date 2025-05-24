@@ -111,11 +111,13 @@ namespace xla::cpu {
 ThunkEmitter::ThunkEmitter(IrEmitter2& ir_emitter,
                            const BufferAssignment& buffer_assignment,
                            const TargetMachineFeatures& target_machine_features,
-                           const HloModuleConfig& hlo_module_config)
+                           const HloModuleConfig& hlo_module_config,
+                           const Options& options)
     : ir_emitter_(ir_emitter),
       buffer_assignment_(buffer_assignment),
       target_machine_features_(target_machine_features),
       hlo_module_config_(hlo_module_config),
+      options_(options),
       communicator_resource_(
           Resource::Create(Resource::kCollectiveCommunicator)) {}
 
@@ -357,8 +359,12 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitHloInstruction(
     case HloOpcode::kConvolution:
       return EmitConvolutionThunk(instruction);
 
-    case HloOpcode::kCopy:
+    case HloOpcode::kCopy: {
+      if (options_.compile_copy_as_llvm_kernel) {
+        return EmitElementalKernelThunk(instruction);
+      }
       return EmitCopyThunk(instruction);
+    }
 
     case HloOpcode::kDot:
       return EmitDotThunk(instruction);
@@ -727,7 +733,8 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitFusionKernelThunk(
     auto* mlir_kernel_source =
         tsl::down_cast<MlirKernelSource*>(kernel_source.get());
 
-    FusionCompiler compiler(FusionCompiler::Options{});
+    FusionCompiler compiler(FusionCompiler::Options{
+        hlo_module_config_.debug_options().xla_cpu_prefer_vector_width()});
     TF_ASSIGN_OR_RETURN(LlvmIrKernelSource llvm_ir_kernel_source,
                         compiler.Compile(std::move(*mlir_kernel_source)));
 
@@ -940,10 +947,11 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitDotThunk(
 
       if (use_xnn) {
         XnnDotThunk::Options options = {XnnShouldUseThreadPool(instruction)};
+        bool capture_rhs = HloPredicateIsOp<HloOpcode::kParameter>(rhs);
         return ThunkSequence::Of<XnnDotThunk>(
             std::move(options), ThunkInfo(instruction), dnums, lhs_slice,
             lhs->shape(), rhs_slice, rhs->shape(), out_slice,
-            instruction->shape());
+            instruction->shape(), capture_rhs);
       } else {
         return ThunkSequence::Of<DotThunk>(
             ThunkInfo(instruction), dnums, lhs_slice, lhs->shape(), rhs_slice,

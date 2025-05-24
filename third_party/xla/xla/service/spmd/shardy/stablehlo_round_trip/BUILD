@@ -1,21 +1,19 @@
 # Import/Export passes for going from `sdy.sharding`s to `mhlo.sharding`s and vice versa.
 
 load("//xla:xla.default.bzl", "xla_cc_test")
+load("//xla/tsl:tsl.bzl", "internal_visibility")
 load("//xla/tsl/platform:rules_cc.bzl", "cc_library")
 
 package(
     # copybara:uncomment default_applicable_licenses = ["//tensorflow:license"],
-    default_visibility = [":friends"],
+    default_visibility = internal_visibility([":friends"]),
     licenses = ["notice"],
 )
 
 package_group(
     name = "friends",
-    packages = [
-        "//learning/deepmind/partir/...",
-        "//learning/deepmind/partir/compiler/mpmd/export/...",
-        "//third_party/openxla/shardy/tools/...",
-        "//xla/service/spmd/shardy/...",
+    includes = [
+        "//xla:friends",
     ],
 )
 
@@ -185,11 +183,9 @@ cc_library(
         "//xla:array",
         "//xla/service/spmd/shardy:utils",
         "@llvm-project//llvm:Support",
-        "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
         "@llvm-project//mlir:Support",
-        "@llvm-project//mlir:TransformUtils",
         "@shardy//shardy/dialect/sdy/ir:dialect",
         "@stablehlo//:stablehlo_ops",
     ],
